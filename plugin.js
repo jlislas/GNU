@@ -34,6 +34,7 @@ function itemFromCard(url, title, poster) {
     title: text(title),
     kind,
     poster: absoluteUrl(poster),
+    siteGenres: [],
   };
 }
 
@@ -43,6 +44,10 @@ function cards(html) {
   let match;
   while ((match = CARD_RE.exec(html)) && out.length < 100) {
     const item = itemFromCard(match[1], match[2], match[3]);
+    const genreMatch = /class="gnrd-card-genres">([^<]*)<\/div>/i.exec(match[0]);
+    item.siteGenres = genreMatch
+      ? genreMatch[1].split("·").map((genre) => text(genre)).filter(Boolean)
+      : [];
     if (!seen.has(item.id)) {
       seen.add(item.id);
       out.push(item);
@@ -90,8 +95,44 @@ export async function home() {
 export async function section({ tab }) {
   await null;
   const rows = await home();
+  const cleanItem = (item) => {
+    const clean = { ...item };
+    delete clean.siteGenres;
+    return clean;
+  };
+  const allItems = rows.flatMap((row) => row.items).map(cleanItem);
+  let popular = [];
+  try {
+    popular = cards(await get(BASE + "/")).map(cleanItem).slice(0, 60);
+  } catch (error) {
+    try { kino.log("popular row failed", error.message); } catch {}
+  }
+  const grouped = new Map();
+  for (const row of rows) {
+    for (const item of row.items) {
+      const genres = item.siteGenres && item.siteGenres.length ? item.siteGenres : [row.title];
+      for (const genre of genres) {
+        if (!grouped.has(genre)) grouped.set(genre, []);
+        const clean = cleanItem(item);
+        if (!grouped.get(genre).some((existing) => existing.id === clean.id)) grouped.get(genre).push(clean);
+      }
+    }
+  }
+  const genreRows = [...grouped.entries()]
+    .sort(([, a], [, b]) => b.length - a.length)
+    .slice(0, 18)
+    .sort(([a], [b]) => a.localeCompare(b, "es"))
+    .map(([genre, items]) => ({
+      id: "genre-" + genre.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      title: genre,
+      items: items.slice(0, 60),
+    }));
   return {
-    rows,
+    rows: [
+      { id: "new", title: "Novedades", items: allItems.slice(0, 60) },
+      ...(popular.length ? [{ id: "popular", title: "Más populares", items: popular }] : []),
+      ...genreRows,
+    ],
   };
 }
 
