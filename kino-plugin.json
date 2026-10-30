@@ -1,7 +1,7 @@
 {
   "id": "gnu-gnula",
   "name": "Gnu",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Películas, series y anime de GNULA HD",
@@ -14,7 +14,11 @@
     "i0.wp.com",
     "i1.wp.com",
     "i2.wp.com",
-    "i3.wp.com"
+    "i3.wp.com",
+    "vidara.to",
+    "savefiles.com",
+    "bysevepoin.com",
+    "voe.sx"
   ],
   "capabilities": [
     "search",
