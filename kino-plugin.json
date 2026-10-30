@@ -1,0 +1,30 @@
+{
+  "id": "gnu-gnula",
+  "name": "Gnu",
+  "version": "0.1.0",
+  "apiVersion": 6,
+  "entry": "plugin.js",
+  "description": "Películas, series y anime de GNULA HD",
+  "author": "jlislas",
+  "homepage": "https://github.com/jlislas/GNU",
+  "hosts": [
+    "gnulahd.nu",
+    "*.gnulahd.nu",
+    "image.tmdb.org",
+    "i0.wp.com",
+    "i1.wp.com",
+    "i2.wp.com",
+    "i3.wp.com"
+  ],
+  "capabilities": [
+    "search",
+    "home",
+    "browse",
+    "episodes",
+    "resolve"
+  ],
+  "color": "#C1440E",
+  "icon": "icon.png",
+  "browser": true,
+  "streamHosts": "any"
+}
