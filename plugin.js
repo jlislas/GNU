@@ -89,17 +89,9 @@ export async function home() {
 
 export async function section({ tab }) {
   await null;
-  const tabs = [
-    { id: "peliculas", label: "Películas", labelEn: "Movies" },
-    { id: "series", label: "Series", labelEn: "Series" },
-    { id: "anime", label: "Anime", labelEn: "Anime" },
-  ];
-  const chosen = tabs.some((entry) => entry.id === tab) ? tab : "peliculas";
   const rows = await home();
   return {
-    tabs,
-    tab: chosen,
-    rows: rows.filter((row) => row.id === chosen),
+    rows,
   };
 }
 
