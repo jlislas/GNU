@@ -1,7 +1,7 @@
 {
   "id": "gnu-gnula",
   "name": "Gnu",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Películas, series y anime de GNULA HD",
@@ -30,5 +30,9 @@
   "color": "#C1440E",
   "icon": "icon.png",
   "browser": true,
-  "streamHosts": "any"
+  "streamHosts": "any",
+  "section": {
+    "label": "Gnu",
+    "labelEn": "Gnu"
+  }
 }
