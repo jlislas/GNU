@@ -1,8 +1,8 @@
 {
   "id": "gnu-gnula",
   "name": "Gnu",
-  "version": "0.1.20",
-  "apiVersion": 6,
+  "version": "0.2.0",
+  "apiVersion": 8,
   "entry": "plugin.js",
   "description": "Películas, series y anime de GNULA HD",
   "author": "jlislas",
@@ -23,7 +23,8 @@
     "home",
     "browse",
     "episodes",
-    "resolve"
+    "resolve",
+    "scopedSearch"
   ],
   "color": "#C1440E",
   "icon": "icon.png",
@@ -35,16 +36,74 @@
   },
   "settings": [
     {
+      "key": "serverPreference",
+      "label": "Servidor preferido",
+      "labelEn": "Preferred server",
+      "type": "select",
+      "default": "any",
+      "options": [
+        {
+          "value": "any",
+          "label": "Cualquiera",
+          "labelEn": "Any"
+        },
+        {
+          "value": "vidara.to",
+          "label": "Vidara"
+        },
+        {
+          "value": "voe.sx",
+          "label": "VOE"
+        }
+      ]
+    },
+    {
+      "key": "cacheSection",
+      "type": "section",
+      "label": "Caché",
+      "labelEn": "Cache"
+    },
+    {
+      "key": "cacheStatus",
+      "type": "status",
+      "label": "Estado",
+      "labelEn": "Status"
+    },
+    {
+      "key": "clearCache",
+      "type": "action",
+      "label": "Vaciar caché",
+      "labelEn": "Clear cache",
+      "confirm": "¿Vaciar la caché de Gnu?",
+      "confirmEn": "Clear Gnu cache?"
+    },
+    {
       "key": "contentType",
       "label": "Tipo de contenido",
       "labelEn": "Content type",
       "type": "select",
       "default": "all",
       "options": [
-        { "value": "all", "label": "Todo", "labelEn": "All" },
-        { "value": "movie", "label": "Películas", "labelEn": "Movies" },
-        { "value": "series", "label": "Series", "labelEn": "Series" },
-        { "value": "anime", "label": "Anime", "labelEn": "Anime" }
+        {
+          "value": "all",
+          "label": "Todo",
+          "labelEn": "All"
+        },
+        {
+          "value": "movie",
+          "label": "Películas",
+          "labelEn": "Movies"
+        },
+        {
+          "value": "series",
+          "label": "Series",
+          "labelEn": "Series"
+        },
+        {
+          "value": "anime",
+          "label": "Anime",
+          "labelEn": "Anime"
+        }
       ]
     },
     {
@@ -54,18 +113,66 @@
       "type": "select",
       "default": "all",
       "options": [
-        { "value": "all", "label": "Todos", "labelEn": "All" },
-        { "value": "accion", "label": "Acción", "labelEn": "Action" },
-        { "value": "animacion", "label": "Animación", "labelEn": "Animation" },
-        { "value": "aventura", "label": "Aventura", "labelEn": "Adventure" },
-        { "value": "comedia", "label": "Comedia", "labelEn": "Comedy" },
-        { "value": "crimen", "label": "Crimen", "labelEn": "Crime" },
-        { "value": "ciencia-ficcion", "label": "Ciencia ficción", "labelEn": "Science fiction" },
-        { "value": "drama", "label": "Drama", "labelEn": "Drama" },
-        { "value": "fantasia", "label": "Fantasía", "labelEn": "Fantasy" },
-        { "value": "misterio", "label": "Misterio", "labelEn": "Mystery" },
-        { "value": "romance", "label": "Romance", "labelEn": "Romance" },
-        { "value": "terror", "label": "Terror", "labelEn": "Horror" }
+        {
+          "value": "all",
+          "label": "Todos",
+          "labelEn": "All"
+        },
+        {
+          "value": "accion",
+          "label": "Acción",
+          "labelEn": "Action"
+        },
+        {
+          "value": "animacion",
+          "label": "Animación",
+          "labelEn": "Animation"
+        },
+        {
+          "value": "aventura",
+          "label": "Aventura",
+          "labelEn": "Adventure"
+        },
+        {
+          "value": "comedia",
+          "label": "Comedia",
+          "labelEn": "Comedy"
+        },
+        {
+          "value": "crimen",
+          "label": "Crimen",
+          "labelEn": "Crime"
+        },
+        {
+          "value": "ciencia-ficcion",
+          "label": "Ciencia ficción",
+          "labelEn": "Science fiction"
+        },
+        {
+          "value": "drama",
+          "label": "Drama",
+          "labelEn": "Drama"
+        },
+        {
+          "value": "fantasia",
+          "label": "Fantasía",
+          "labelEn": "Fantasy"
+        },
+        {
+          "value": "misterio",
+          "label": "Misterio",
+          "labelEn": "Mystery"
+        },
+        {
+          "value": "romance",
+          "label": "Romance",
+          "labelEn": "Romance"
+        },
+        {
+          "value": "terror",
+          "label": "Terror",
+          "labelEn": "Horror"
+        }
       ]
     },
     {
@@ -75,16 +182,47 @@
       "type": "select",
       "default": "all",
       "options": [
-        { "value": "all", "label": "Cualquier año", "labelEn": "Any year" },
-        { "value": "2026", "label": "2026" },
-        { "value": "2025", "label": "2025" },
-        { "value": "2024", "label": "2024" },
-        { "value": "2023", "label": "2023" },
-        { "value": "2022", "label": "2022" },
-        { "value": "2021", "label": "2021" },
-        { "value": "2020", "label": "2020" },
-        { "value": "2010", "label": "2010" },
-        { "value": "2000", "label": "2000" }
+        {
+          "value": "all",
+          "label": "Cualquier año",
+          "labelEn": "Any year"
+        },
+        {
+          "value": "2026",
+          "label": "2026"
+        },
+        {
+          "value": "2025",
+          "label": "2025"
+        },
+        {
+          "value": "2024",
+          "label": "2024"
+        },
+        {
+          "value": "2023",
+          "label": "2023"
+        },
+        {
+          "value": "2022",
+          "label": "2022"
+        },
+        {
+          "value": "2021",
+          "label": "2021"
+        },
+        {
+          "value": "2020",
+          "label": "2020"
+        },
+        {
+          "value": "2010",
+          "label": "2010"
+        },
+        {
+          "value": "2000",
+          "label": "2000"
+        }
       ]
     },
     {
@@ -94,17 +232,52 @@
       "type": "select",
       "default": "all",
       "options": [
-        { "value": "all", "label": "Cualquier año", "labelEn": "Any year" },
-        { "value": "2026", "label": "2026" },
-        { "value": "2025", "label": "2025" },
-        { "value": "2024", "label": "2024" },
-        { "value": "2023", "label": "2023" },
-        { "value": "2022", "label": "2022" },
-        { "value": "2021", "label": "2021" },
-        { "value": "2020", "label": "2020" },
-        { "value": "2010", "label": "2010" },
-        { "value": "2000", "label": "2000" }
+        {
+          "value": "all",
+          "label": "Cualquier año",
+          "labelEn": "Any year"
+        },
+        {
+          "value": "2026",
+          "label": "2026"
+        },
+        {
+          "value": "2025",
+          "label": "2025"
+        },
+        {
+          "value": "2024",
+          "label": "2024"
+        },
+        {
+          "value": "2023",
+          "label": "2023"
+        },
+        {
+          "value": "2022",
+          "label": "2022"
+        },
+        {
+          "value": "2021",
+          "label": "2021"
+        },
+        {
+          "value": "2020",
+          "label": "2020"
+        },
+        {
+          "value": "2010",
+          "label": "2010"
+        },
+        {
+          "value": "2000",
+          "label": "2000"
+        }
       ]
     }
-  ]
+  ],
+  "signature": {
+    "authorKey": "d28deb8326c4fe720294a081cacb1efa40c15791e7e8c094cdad6ff94d5ed4d3",
+    "value": "3659bd110060558ac0cdc3246a737d4f7607496b0b18a0f532c172ac1337813e09f0db2e6940a1aee362d2ee00ecf16535ff05b6291df619ba77caf3e1f75203"
+  }
 }

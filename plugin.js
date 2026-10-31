@@ -172,6 +172,22 @@ async function get(url) {
   return response.text();
 }
 
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
+async function cachedGet(url, key) {
+  const cacheKey = "cache:" + key;
+  try {
+    const saved = kino.storage.get(cacheKey);
+    if (saved) {
+      const entry = JSON.parse(saved);
+      if (Date.now() - entry.at < CACHE_TTL_MS && typeof entry.text === "string") return entry.text;
+    }
+  } catch {}
+  const html = await get(url);
+  try { kino.storage.set(cacheKey, JSON.stringify({ at: Date.now(), text: html }), { ttlMs: CACHE_TTL_MS }); } catch {}
+  return html;
+}
+
 function searchUrl(query) {
   return BASE + "/?s=" + encodeURIComponent(String(query || "").trim());
 }
@@ -180,7 +196,17 @@ export async function search(query) {
   await null;
   const value = String(query && query.q || "").trim();
   if (!value) return [];
-  return classifySearchItems(cards(await get(searchUrl(value))));
+  const found = await classifySearchItems(cards(await cachedGet(searchUrl(value), "search:" + value.toLowerCase())));
+  if (!query || !query.within) return found;
+  const within = String(query.within);
+  if (within.startsWith("/list/series")) return found.filter((item) => item.kind === "series");
+  if (within.startsWith("/list/peliculas")) return found.filter((item) => item.kind === "movie");
+  if (within.startsWith("/list/anime")) return found.filter((item) => item.kind === "series");
+  if (within.startsWith("genre:")) {
+    const wanted = within.slice(6).replace(/-/g, " ");
+    return found.filter((item) => (item.siteGenres || []).some((genre) => genre.toLowerCase().includes(wanted)));
+  }
+  return found;
 }
 
 export async function home() {
@@ -193,7 +219,7 @@ export async function home() {
   const rows = [];
   for (const [id, title, path, kind] of sections) {
     try {
-      const items = cards(await get(BASE + path)).map((item) => ({ ...item, kind }));
+      const items = cards(await cachedGet(BASE + path, "home:" + path)).map((item) => ({ ...item, kind }));
       if (items.length) rows.push({ id, ref: path, title, items });
     } catch (error) {
       try { kino.log("home row failed", id, error.message); } catch {}
@@ -406,6 +432,35 @@ export async function episodes(ref) {
   return { series: { title: info.title, poster: info.poster }, episodes: result };
 }
 
+export async function details(ref) {
+  await null;
+  const html = await cachedGet(absoluteUrl(ref), "details:" + ref);
+  const info = pageInfo(html, ref);
+  const genres = [...html.matchAll(/class="gnrd-card-genres"[^>]*>([^<]+)/gi)].map((m) => text(m[1]).split("·")).flat();
+  const rating = /aggregateRating[\s\S]*?ratingValue"\s*:\s*([\d.]+)/i.exec(html);
+  const backdrop = /https:\/\/image\.tmdb\.org\/t\/p\/w1280\/[^"' ]+/i.exec(html);
+  return {
+    overview: info.overview,
+    poster: info.poster,
+    backdrop: backdrop ? backdrop[0] : undefined,
+    genres: genres.length ? [...new Set(genres.map((g) => text(g)))] : undefined,
+    year: info.year,
+    rating: rating ? Number(rating[1]) : undefined,
+  };
+}
+
+export async function settingsStatus() {
+  let count = 0;
+  try { count = kino.storage.keys().filter((key) => key.startsWith("cache:")).length; } catch {}
+  return { info: `Entradas en caché: ${count}` };
+}
+
+export async function action(key) {
+  if (key !== "clearCache") return { message: "" };
+  try { for (const item of kino.storage.keys()) if (item.startsWith("cache:")) kino.storage.remove(item); } catch {}
+  return { message: "Caché vaciada" };
+}
+
 function unpack(value) {
   const binary = atob(value);
   const key = [103, 78, 55, 100];
@@ -421,32 +476,55 @@ async function playerServers(html, pageUrl) {
   const response = await kino.fetch(endpoint, { headers: { "X-Gn-Scr": "kino", "Referer": pageUrl } });
   if (!response.ok) throw kino.error("unavailable", "No se pudo consultar el reproductor");
   const data = unpack(response.json().p);
-  return (data.langs || []).flatMap((language) => (language.servers || []).map((server) => ({
+  const servers = (data.langs || []).flatMap((language) => (language.servers || []).map((server) => ({
     label: `${language.label || "Video"} · ${server.title || "Servidor"}`,
     url: server.src,
   }))).filter((server) => {
     try { return SAFE_SERVER_HOSTS.has(new URL(server.url).hostname.replace(/^www\./, "")); } catch { return false; }
   });
+  let preferred = "any";
+  try { preferred = String(kino.config.get("serverPreference") || "any"); } catch {}
+  if (preferred !== "any") servers.sort((a, b) => Number(new URL(b.url).hostname === preferred) - Number(new URL(a.url).hostname === preferred));
+  return servers;
 }
 
 async function capture(server) {
   const page = await kino.browser.capture(server.url, { timeoutMs: 18000 });
   const media = page.media && page.media[0];
   if (!media) throw kino.error("unavailable", "El servidor no entregó video");
-  return { url: media.url, mime: media.mime, headers: media.headers };
+  const subtitles = (page.subtitles || []).map((subtitle) => ({
+    lang: subtitle.lang || "und",
+    url: subtitle.url,
+    format: subtitle.format === "srt" ? "srt" : "vtt",
+  }));
+  return { url: media.url, mime: media.mime, headers: media.headers, subtitles };
 }
 
 export async function resolve(ref) {
   await null;
-  const pageUrl = absoluteUrl(ref);
+  const separator = String(ref).lastIndexOf("|");
+  const pageRef = separator > 0 ? String(ref).slice(0, separator) : String(ref);
+  const selected = separator > 0 ? Number(String(ref).slice(separator + 1)) : null;
+  const pageUrl = absoluteUrl(pageRef);
   const html = await get(pageUrl);
-  const servers = await playerServers(html, pageUrl);
+  const allServers = await playerServers(html, pageUrl);
+  const servers = selected === null ? allServers : [allServers[selected]].filter(Boolean);
   if (!servers.length) throw kino.error("unavailable", "No hay servidores disponibles");
   let firstError;
   for (const server of servers.slice(0, 3)) {
     try {
       const stream = await capture(server);
-      return { ...stream, label: server.label };
+      const response = { ...stream, label: server.label };
+      if (stream.subtitles && !stream.subtitles.length) delete response.subtitles;
+      if (selected === null) {
+        const index = allServers.indexOf(server);
+        response.alternatives = allServers
+          .map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
+          .filter(({ candidateIndex }) => candidateIndex !== index)
+          .slice(0, 7)
+          .map(({ candidate, candidateIndex }) => ({ label: candidate.label, ref: pageUrl + "|" + candidateIndex }));
+      }
+      return response;
     } catch (error) {
       firstError = error;
       if (!["blocked", "timeout", "browser_unavailable"].includes(error.code)) throw error;
