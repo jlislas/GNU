@@ -60,7 +60,7 @@ function cards(html) {
   return out;
 }
 
-function upcomingCards(html, type) {
+function upcomingCards(html, type, mode) {
   const out = [];
   const seen = new Set();
   let match;
@@ -73,7 +73,10 @@ function upcomingCards(html, type) {
     const dateMatch = /class="gnest-ecard-date">([^<]+)<\/span>/i.exec(card);
     if (!kindMatch || !hrefMatch || !titleMatch || !imageMatch) continue;
     if (type && type !== "all" && kindMatch[1] !== type) continue;
-    const ref = absoluteUrl(hrefMatch[1]);
+    const editorialRef = absoluteUrl(hrefMatch[1]);
+    const ref = mode === "released"
+      ? BASE + "/ver/" + slugFromUrl(editorialRef) + "/"
+      : editorialRef;
     if (seen.has(ref)) continue;
     seen.add(ref);
     const yearMatch = /(\d{4})/.exec(dateMatch ? dateMatch[1] : "");
@@ -184,7 +187,7 @@ export async function section({ tab }) {
   if (["proximos", "estrenadas"].includes(chosen)) {
     const mode = chosen === "estrenadas" ? "released" : "next";
     const html = await get(upcomingUrl(mode, "all"));
-    const all = upcomingCards(html, "all");
+    const all = upcomingCards(html, "all", mode);
     const movies = all.filter((item) => item.kind === "movie");
     const series = all.filter((item) => item.kind === "series");
     return {
@@ -263,7 +266,7 @@ export async function browse(ref, cursor) {
     const mode = upcoming[1];
     const type = upcoming[2];
     const html = await get(upcomingUrl(mode, type, page));
-    const items = upcomingCards(html, type);
+    const items = upcomingCards(html, type, mode);
     return { items, next: items.length >= 100 ? String(page + 1) : undefined };
   }
   let path = lists[raw.replace(/^\/list\//, "")] || null;
