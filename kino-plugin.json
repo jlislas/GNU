@@ -1,7 +1,7 @@
 {
   "id": "gnu-gnula",
   "name": "Gnu",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Películas, series y anime de GNULA HD",
@@ -16,8 +16,6 @@
     "i2.wp.com",
     "i3.wp.com",
     "vidara.to",
-    "savefiles.com",
-    "bysevepoin.com",
     "voe.sx"
   ],
   "capabilities": [
@@ -34,5 +32,45 @@
   "section": {
     "label": "Gnu",
     "labelEn": "Gnu"
-  }
+  },
+  "settings": [
+    {
+      "key": "yearFrom",
+      "label": "Año desde",
+      "labelEn": "From year",
+      "type": "select",
+      "default": "all",
+      "options": [
+        { "value": "all", "label": "Cualquier año", "labelEn": "Any year" },
+        { "value": "2026", "label": "2026" },
+        { "value": "2025", "label": "2025" },
+        { "value": "2024", "label": "2024" },
+        { "value": "2023", "label": "2023" },
+        { "value": "2022", "label": "2022" },
+        { "value": "2021", "label": "2021" },
+        { "value": "2020", "label": "2020" },
+        { "value": "2010", "label": "2010" },
+        { "value": "2000", "label": "2000" }
+      ]
+    },
+    {
+      "key": "yearTo",
+      "label": "Año hasta",
+      "labelEn": "To year",
+      "type": "select",
+      "default": "all",
+      "options": [
+        { "value": "all", "label": "Cualquier año", "labelEn": "Any year" },
+        { "value": "2026", "label": "2026" },
+        { "value": "2025", "label": "2025" },
+        { "value": "2024", "label": "2024" },
+        { "value": "2023", "label": "2023" },
+        { "value": "2022", "label": "2022" },
+        { "value": "2021", "label": "2021" },
+        { "value": "2020", "label": "2020" },
+        { "value": "2010", "label": "2010" },
+        { "value": "2000", "label": "2000" }
+      ]
+    }
+  ]
 }
