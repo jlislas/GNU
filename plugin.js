@@ -27,6 +27,12 @@ function absoluteUrl(url) {
   return new URL(url, BASE).href;
 }
 
+function upcomingPoster(url) {
+  const absolute = absoluteUrl(url);
+  if (!/\.webp(?:[?#]|$)/i.test(absolute)) return absolute;
+  return "https://i0.wp.com/" + absolute.replace(/^https?:\/\//i, "").split("?")[0];
+}
+
 function itemFromCard(url, title, poster, year) {
   const lower = title.toLowerCase();
   const kind = /anime/.test(lower) ? "series" : /serie|temporada|season/.test(lower) ? "series" : "movie";
@@ -86,7 +92,7 @@ function upcomingCards(html, type, mode) {
       title: text(titleMatch[1]),
       kind: kindMatch[1] === "serie" ? "series" : "movie",
       year: yearMatch ? yearMatch[1] : undefined,
-      poster: absoluteUrl(imageMatch[1]),
+      poster: upcomingPoster(imageMatch[1]),
     });
   }
   return yearFiltered(out);
