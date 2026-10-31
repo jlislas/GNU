@@ -7,6 +7,7 @@ const CARD_RE = /<a\s+class="gnrd-card"\s+href="([^"]+)"\s+title="([^"]*)"[\s\S]
 const EP_RE = /<a\s+class="gnrd-epc"\s+href="([^"]+)"[^>]*data-s="(\d+)"[^>]*data-e="(\d+)"[\s\S]*?<span class="gnrd-epc-title">([^<]*)<\/span>/gi;
 const PLAYER_RE = /var\s+_gnrdPid\s*=\s*(\d+)\s*,\s*_gnrdTok\s*=\s*"([a-f0-9]+)"/i;
 const SAFE_SERVER_HOSTS = new Set(["vidara.to", "voe.sx"]);
+const UPCOMING_RE = /<a\s+class="gnrd-card\s+gnest-ecard"([\s\S]*?)<\/a>/gi;
 
 function text(value) {
   return String(value || "")
@@ -18,7 +19,7 @@ function text(value) {
 }
 
 function slugFromUrl(url) {
-  const match = /\/ver\/([^/?#]+)\/?$/i.exec(url);
+  const match = /\/(?:ver|proximos-estrenos)\/([^/?#]+)\/?$/i.exec(url);
   return match ? match[1] : url;
 }
 
@@ -59,6 +60,43 @@ function cards(html) {
   return out;
 }
 
+function upcomingCards(html, type) {
+  const out = [];
+  const seen = new Set();
+  let match;
+  while ((match = UPCOMING_RE.exec(html)) && out.length < 100) {
+    const card = match[1];
+    const kindMatch = /data-tipo="(pelicula|serie)"/i.exec(card);
+    const hrefMatch = /href="([^"]*\/proximos-estrenos\/[^"?#]+\/?)"/i.exec(card);
+    const titleMatch = /class="gnrd-card-title">([^<]+)<\/span>/i.exec(card);
+    const imageMatch = /<img[^>]+src="([^"]+)"/i.exec(card);
+    const dateMatch = /class="gnest-ecard-date">([^<]+)<\/span>/i.exec(card);
+    if (!kindMatch || !hrefMatch || !titleMatch || !imageMatch) continue;
+    if (type && type !== "all" && kindMatch[1] !== type) continue;
+    const ref = absoluteUrl(hrefMatch[1]);
+    if (seen.has(ref)) continue;
+    seen.add(ref);
+    const yearMatch = /(\d{4})/.exec(dateMatch ? dateMatch[1] : "");
+    out.push({
+      id: slugFromUrl(ref),
+      ref,
+      title: text(titleMatch[1]),
+      kind: kindMatch[1] === "serie" ? "series" : "movie",
+      year: yearMatch ? yearMatch[1] : undefined,
+      poster: absoluteUrl(imageMatch[1]),
+    });
+  }
+  return yearFiltered(out);
+}
+
+function upcomingUrl(mode, type, page = 1) {
+  const path = "/proximos-estrenos/" + (page > 1 ? "page/" + page + "/" : "");
+  const params = [];
+  if (mode === "released") params.push("ver=estrenadas");
+  if (type && type !== "all") params.push("tipo=" + encodeURIComponent(type));
+  return BASE + path + (params.length ? "?" + params.join("&") : "");
+}
+
 function yearFiltered(items) {
   let from = "all";
   let to = "all";
@@ -75,6 +113,19 @@ function yearFiltered(items) {
   });
 }
 
+async function classifySearchItems(items) {
+  const candidates = items.slice(0, 20);
+  await Promise.all(candidates.map(async (item) => {
+    try {
+      const html = await get(item.ref);
+      if (/<meta\s+name="description"\s+content="Serie\b/i.test(html) || /<[^>]*>Serie\s*[·|]/i.test(html)) {
+        item.kind = "series";
+      }
+    } catch {}
+  }));
+  return items;
+}
+
 async function get(url) {
   const response = await kino.fetch(url);
   if (!response.ok) throw kino.error("unavailable", "La fuente no respondió");
@@ -89,7 +140,7 @@ export async function search(query) {
   await null;
   const value = String(query && query.q || "").trim();
   if (!value) return [];
-  return cards(await get(searchUrl(value)));
+  return classifySearchItems(cards(await get(searchUrl(value))));
 }
 
 export async function home() {
@@ -119,6 +170,7 @@ export async function section({ tab }) {
     { id: "series", label: "Series", labelEn: "Series" },
     { id: "anime", label: "Anime", labelEn: "Anime" },
     { id: "proximos", label: "Próximos estrenos", labelEn: "Coming soon" },
+    { id: "estrenadas", label: "Ya estrenadas", labelEn: "Released" },
     { id: "generos", label: "Géneros", labelEn: "Genres" },
     { id: "anos", label: "Años", labelEn: "Years" },
   ];
@@ -129,12 +181,20 @@ export async function section({ tab }) {
     delete clean.siteGenres;
     return clean;
   };
-  if (chosen === "proximos") {
-    const items = yearFiltered(cards(await get(BASE + "/proximos-estrenos/"))).map(cleanItem);
+  if (["proximos", "estrenadas"].includes(chosen)) {
+    const mode = chosen === "estrenadas" ? "released" : "next";
+    const html = await get(upcomingUrl(mode, "all"));
+    const all = upcomingCards(html, "all");
+    const movies = all.filter((item) => item.kind === "movie");
+    const series = all.filter((item) => item.kind === "series");
     return {
       tabs,
       tab: chosen,
-      rows: items.length ? [{ id: "proximos", title: "Próximos estrenos", ref: "/list/proximos", items }] : [],
+      rows: [
+        { id: chosen + "-todo", title: chosen === "proximos" ? "Todos los próximos estrenos" : "Todas las ya estrenadas", ref: `upcoming:${mode}:all`, items: all.slice(0, 60) },
+        { id: chosen + "-peliculas", title: "Películas", ref: `upcoming:${mode}:pelicula`, items: movies.slice(0, 60) },
+        { id: chosen + "-series", title: "Series", ref: `upcoming:${mode}:serie`, items: series.slice(0, 60) },
+      ].filter((row) => row.items.length),
     };
   }
   if (["novedades", "peliculas", "series", "anime"].includes(chosen)) {
@@ -198,6 +258,14 @@ export async function browse(ref, cursor) {
     proximos: "/proximos-estrenos/",
   };
   const raw = String(ref || "list:peliculas");
+  const upcoming = /^upcoming:(next|released):(all|pelicula|serie)$/.exec(raw);
+  if (upcoming) {
+    const mode = upcoming[1];
+    const type = upcoming[2];
+    const html = await get(upcomingUrl(mode, type, page));
+    const items = upcomingCards(html, type);
+    return { items, next: items.length >= 100 ? String(page + 1) : undefined };
+  }
   let path = lists[raw.replace(/^\/list\//, "")] || null;
   if (!path && raw.startsWith("genre:")) path = "/genres/" + raw.slice(6) + "/";
   if (!path) throw kino.error("not_found", "Categoría inválida");

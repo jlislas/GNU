@@ -1,7 +1,7 @@
 {
   "id": "gnu-gnula",
   "name": "Gnu",
-  "version": "0.1.9",
+  "version": "0.1.12",
   "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Películas, series y anime de GNULA HD",
