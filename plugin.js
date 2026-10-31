@@ -33,7 +33,7 @@ function upcomingPoster(url) {
   return "https://i0.wp.com/" + absolute.replace(/^https?:\/\//i, "").split("?")[0];
 }
 
-function itemFromCard(url, title, poster, year) {
+function itemFromCard(url, title, poster, year, rating) {
   const lower = title.toLowerCase();
   const kind = /anime/.test(lower) ? "series" : /serie|temporada|season/.test(lower) ? "series" : "movie";
   return {
@@ -42,6 +42,7 @@ function itemFromCard(url, title, poster, year) {
     title: text(title),
     kind,
     year: year || undefined,
+    rating: rating || undefined,
     poster: absoluteUrl(poster),
     siteGenres: [],
   };
@@ -53,7 +54,15 @@ function cards(html) {
   let match;
   while ((match = CARD_RE.exec(html)) && out.length < 100) {
     const yearMatch = /class="gnrd-card-metaline"[^>]*>[\s\S]*?<span>(\d{4})<\/span>/i.exec(match[0]);
-    const item = itemFromCard(match[1], match[2], match[3], yearMatch && yearMatch[1]);
+    const ratingMatch = /class="gnrd-rating"[^>]*>\s*[★☆]?\s*([\d]+(?:[.,]\d+)?)/i.exec(match[0])
+      || /class="gnrd-cm-rating"[^>]*>\s*[★☆]?\s*([\d]+(?:[.,]\d+)?)/i.exec(match[0]);
+    const item = itemFromCard(
+      match[1],
+      match[2],
+      match[3],
+      yearMatch && yearMatch[1],
+      ratingMatch ? Number(ratingMatch[1].replace(",", ".")) : undefined,
+    );
     const genreMatch = /class="gnrd-card-genres">([^<]*)<\/div>/i.exec(match[0]);
     item.siteGenres = genreMatch
       ? genreMatch[1].split("·").map((genre) => text(genre)).filter(Boolean)
@@ -95,7 +104,7 @@ function upcomingCards(html, type, mode) {
       poster: upcomingPoster(imageMatch[1]),
     });
   }
-  return yearFiltered(out);
+  return filterItems(out);
 }
 
 function upcomingUrl(mode, type, page = 1) {
@@ -120,6 +129,28 @@ function yearFiltered(items) {
     const year = Number(item.year);
     return year >= Math.min(min, max) && year <= Math.max(min, max);
   });
+}
+
+function filterItems(items) {
+  let type = "all";
+  let genre = "all";
+  try {
+    type = String(kino.config.get("contentType") || "all");
+    genre = String(kino.config.get("genreFilter") || "all");
+  } catch {}
+  const wantedGenre = genre === "all" ? "" : genre.replace(/-/g, " ");
+  return yearFiltered(items).filter((item) => {
+    if (type !== "all" && item.kind !== type) return false;
+    if (!wantedGenre) return true;
+    return (item.siteGenres || []).some((value) => {
+      const normalized = String(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      return normalized.includes(wantedGenre);
+    });
+  });
+}
+
+function newestFirst(items) {
+  return [...items].sort((a, b) => Number(b.year || 0) - Number(a.year || 0));
 }
 
 async function classifySearchItems(items) {
@@ -181,10 +212,9 @@ export async function section({ tab }) {
     { id: "proximos", label: "Próximos estrenos", labelEn: "Coming soon" },
     { id: "estrenadas", label: "Ya estrenadas", labelEn: "Released" },
     { id: "generos", label: "Géneros", labelEn: "Genres" },
-    { id: "anos", label: "Años", labelEn: "Years" },
   ];
   const chosen = tabs.some((entry) => entry.id === tab) ? tab : "peliculas";
-  const allRows = (await home()).map((row) => ({ ...row, items: yearFiltered(row.items) }));
+  const allRows = (await home()).map((row) => ({ ...row, items: filterItems(row.items) }));
   const cleanItem = (item) => {
     const clean = { ...item };
     delete clean.siteGenres;
@@ -208,12 +238,49 @@ export async function section({ tab }) {
   }
   if (["novedades", "peliculas", "series", "anime"].includes(chosen)) {
     const wanted = chosen === "novedades" ? ["peliculas", "series", "anime"] : [chosen];
+    const typeRows = [];
+    for (const row of allRows.filter((entry) => wanted.includes(entry.id))) {
+      const items = row.items.map(cleanItem);
+      if (!items.length) continue;
+      typeRows.push({
+        id: row.id + "-disponibles",
+        title: row.id === "peliculas" ? "Películas disponibles" : row.id === "series" ? "Series disponibles" : "Anime disponible",
+        ref: "/list/" + row.id,
+        items: newestFirst(items).slice(0, 20),
+      });
+      const ranked = [...items].sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+      typeRows.push({
+        id: row.id + "-valoradas",
+        title: row.id === "peliculas" ? "Películas mejor valoradas" : row.id === "series" ? "Series mejor valoradas" : "Anime mejor valorado",
+        ref: "ranked:" + row.id,
+        items: ranked.slice(0, 20),
+      });
+      const groups = new Map();
+      const years = new Map();
+      for (const item of row.items) {
+        if (item.year) {
+          if (!years.has(item.year)) years.set(item.year, []);
+          years.get(item.year).push(cleanItem(item));
+        }
+        for (const genre of item.siteGenres || []) {
+          if (!groups.has(genre)) groups.set(genre, []);
+          const clean = cleanItem(item);
+          if (!groups.get(genre).some((existing) => existing.id === clean.id)) groups.get(genre).push(clean);
+        }
+      }
+      for (const [genre, genreItems] of [...groups.entries()].sort(([, a], [, b]) => b.length - a.length).slice(0, 8)) {
+        typeRows.push({
+          id: row.id + "-genre-" + genre.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          title: genre,
+          ref: "genre:" + genre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+          items: newestFirst(genreItems).slice(0, 20),
+        });
+      }
+    }
     return {
       tabs,
       tab: chosen,
-      rows: allRows
-        .filter((row) => wanted.includes(row.id))
-        .map((row) => ({ ...row, items: row.items.map(cleanItem), ref: "/list/" + row.id })),
+      rows: typeRows.slice(0, 20),
     };
   }
 
@@ -242,17 +309,13 @@ export async function section({ tab }) {
     .map(([genre, items]) => ({
       id: "genre-" + genre.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
       title: genre,
-      items: items.slice(0, 60),
+      items: newestFirst(items).slice(0, 60),
       ref: "genre:" + genre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
     }));
-  const yearRows = [...byYear.entries()]
-    .sort(([a], [b]) => Number(b) - Number(a))
-    .slice(0, 18)
-    .map(([year, items]) => ({ id: "year-" + year, title: year, items: items.slice(0, 60) }));
   return {
     tabs,
     tab: chosen,
-    rows: chosen === "generos" ? genreRows : yearRows,
+    rows: genreRows,
   };
 }
 
@@ -275,11 +338,32 @@ export async function browse(ref, cursor) {
     const items = upcomingCards(html, type, mode);
     return { items, next: items.length >= 100 ? String(page + 1) : undefined };
   }
+  const ranked = /^ranked:(peliculas|series|anime)$/.exec(raw);
+  if (ranked) {
+    const path = "/ver/" + (ranked[1] === "peliculas" ? "peliculas" : ranked[1]) + "/";
+    const rankedPage = page > 1 ? path + "?page=" + page : path;
+    const items = filterItems(cards(await get(BASE + rankedPage))).sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+    return {
+      items: items.slice(0, 20).map((item) => { delete item.siteGenres; return item; }),
+      next: items.length >= 20 ? String(page + 1) : undefined,
+    };
+  }
+  const yearList = /^year:(peliculas|series|anime):(\d{4})$/.exec(raw);
+  if (yearList) {
+    const path = "/ver/" + (yearList[1] === "peliculas" ? "peliculas" : yearList[1]) + "/";
+    const pageUrl = page > 1 ? path + "?page=" + page : path;
+    const source = cards(await get(BASE + pageUrl));
+    const items = filterItems(source).filter((item) => item.year === yearList[2]);
+    return {
+      items: items.slice(0, 20).map((item) => { delete item.siteGenres; return item; }),
+      next: source.length >= 100 ? String(page + 1) : undefined,
+    };
+  }
   let path = lists[raw.replace(/^\/list\//, "")] || null;
   if (!path && raw.startsWith("genre:")) path = "/genres/" + raw.slice(6) + "/";
   if (!path) throw kino.error("not_found", "Categoría inválida");
   const separator = path.includes("?") ? "&" : "?";
-  const items = yearFiltered(cards(await get(BASE + path + separator + "page=" + page)));
+  const items = filterItems(cards(await get(BASE + path + separator + "page=" + page)));
   return { items: items.map((item) => { delete item.siteGenres; return item; }), next: items.length === 100 ? String(page + 1) : undefined };
 }
 

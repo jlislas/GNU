@@ -1,7 +1,7 @@
 {
   "id": "gnu-gnula",
   "name": "Gnu",
-  "version": "0.1.14",
+  "version": "0.1.20",
   "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Películas, series y anime de GNULA HD",
@@ -34,6 +34,40 @@
     "labelEn": "Gnu"
   },
   "settings": [
+    {
+      "key": "contentType",
+      "label": "Tipo de contenido",
+      "labelEn": "Content type",
+      "type": "select",
+      "default": "all",
+      "options": [
+        { "value": "all", "label": "Todo", "labelEn": "All" },
+        { "value": "movie", "label": "Películas", "labelEn": "Movies" },
+        { "value": "series", "label": "Series", "labelEn": "Series" },
+        { "value": "anime", "label": "Anime", "labelEn": "Anime" }
+      ]
+    },
+    {
+      "key": "genreFilter",
+      "label": "Género",
+      "labelEn": "Genre",
+      "type": "select",
+      "default": "all",
+      "options": [
+        { "value": "all", "label": "Todos", "labelEn": "All" },
+        { "value": "accion", "label": "Acción", "labelEn": "Action" },
+        { "value": "animacion", "label": "Animación", "labelEn": "Animation" },
+        { "value": "aventura", "label": "Aventura", "labelEn": "Adventure" },
+        { "value": "comedia", "label": "Comedia", "labelEn": "Comedy" },
+        { "value": "crimen", "label": "Crimen", "labelEn": "Crime" },
+        { "value": "ciencia-ficcion", "label": "Ciencia ficción", "labelEn": "Science fiction" },
+        { "value": "drama", "label": "Drama", "labelEn": "Drama" },
+        { "value": "fantasia", "label": "Fantasía", "labelEn": "Fantasy" },
+        { "value": "misterio", "label": "Misterio", "labelEn": "Mystery" },
+        { "value": "romance", "label": "Romance", "labelEn": "Romance" },
+        { "value": "terror", "label": "Terror", "labelEn": "Horror" }
+      ]
+    },
     {
       "key": "yearFrom",
       "label": "Año desde",
