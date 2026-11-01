@@ -85,6 +85,34 @@ function trendCards(html, pane) {
   return cards(end ? rest.slice(0, end.index) : rest);
 }
 
+function homepageRows(html) {
+  const rows = [];
+  const sectionRe = /<section\s+class="gnrd-row(?:\s+[^>]*)?">([\s\S]*?)<\/section>/gi;
+  let match;
+  while ((match = sectionRe.exec(html))) {
+    const body = match[1];
+    const titleMatch = /<h2[^>]*>([^<]+)<\/h2>/i.exec(body);
+    if (!titleMatch) continue;
+    const title = text(titleMatch[1]);
+    if (!title || /^tendencias$/i.test(title)) continue;
+    const viewMatch = /class="gnrd-viewall"[^>]+href="([^"]+)"/i.exec(body);
+    const items = /próximos|estrenos/i.test(title) ? upcomingCards(body, "all", "next") : cards(body);
+    if (!items.length) continue;
+    let ref;
+    if (viewMatch) {
+      const path = new URL(viewMatch[1], BASE).pathname;
+      const genre = /^\/genres\/([^/]+)/i.exec(path);
+      if (genre) ref = "genre:" + genre[1];
+      else if (/proximos-estrenos/i.test(path)) ref = "upcoming:next:all";
+      else if (/\/ver\/peliculas/i.test(path)) ref = "/list/peliculas";
+      else if (/\/ver\/series/i.test(path)) ref = "/list/series";
+      else if (/\/ver\/anime/i.test(path)) ref = "/list/anime";
+    }
+    rows.push({ id: "home-" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-"), title, ref, items: filterItems(items.map((item) => ({ ...item, siteGenres: item.siteGenres || [] }))).slice(0, 20) });
+  }
+  return rows.filter((row) => row.items.length);
+}
+
 function upcomingCards(html, type, mode) {
   const out = [];
   const seen = new Set();
@@ -96,8 +124,8 @@ function upcomingCards(html, type, mode) {
     const titleMatch = /class="gnrd-card-title">([^<]+)<\/span>/i.exec(card);
     const imageMatch = /<img[^>]+src="([^"]+)"/i.exec(card);
     const dateMatch = /class="gnest-ecard-date">([^<]+)<\/span>/i.exec(card);
-    if (!kindMatch || !hrefMatch || !titleMatch || !imageMatch) continue;
-    if (type && type !== "all" && mode !== "released" && kindMatch[1] !== type) continue;
+    if (!hrefMatch || !titleMatch || !imageMatch) continue;
+    if (type && type !== "all" && mode !== "released" && kindMatch && kindMatch[1] !== type) continue;
     const editorialRef = absoluteUrl(hrefMatch[1]);
     const ref = mode === "released"
       ? BASE + "/ver/" + slugFromUrl(editorialRef) + "/"
@@ -109,7 +137,7 @@ function upcomingCards(html, type, mode) {
       id: slugFromUrl(ref),
       ref,
       title: text(titleMatch[1]),
-      kind: kindMatch[1] === "serie" ? "series" : "movie",
+      kind: kindMatch && kindMatch[1] === "serie" ? "series" : "movie",
       year: yearMatch ? yearMatch[1] : undefined,
       poster: upcomingPoster(imageMatch[1]),
     });
@@ -276,10 +304,14 @@ export async function section({ tab }) {
     const html = await cachedGet(BASE + "/", "trend-home");
     const pane = chosen === "tendencia-semanal" ? "sem" : "hoy";
     const items = filterItems(trendCards(html, pane)).map(cleanItem);
+    const rows = homepageRows(html).map((row) => ({ ...row, items: row.items.map(cleanItem) }));
     return {
       tabs,
       tab: chosen,
-      rows: items.length ? [{ id: chosen, title: chosen === "tendencia-semanal" ? "Tendencia semanal" : "Tendencia de hoy", ref: "trend:" + pane, items: items.slice(0, 20) }] : [],
+      rows: [
+        ...(items.length ? [{ id: chosen, title: chosen === "tendencia-semanal" ? "Tendencia semanal" : "Tendencia de hoy", ref: "trend:" + pane, items: items.slice(0, 20) }] : []),
+        ...rows,
+      ].slice(0, 20),
     };
   }
   if (["proximos", "estrenadas"].includes(chosen)) {
