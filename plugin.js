@@ -63,6 +63,8 @@ function cards(html) {
       yearMatch && yearMatch[1],
       ratingMatch ? Number(ratingMatch[1].replace(",", ".")) : undefined,
     );
+    const typeMatch = /class="gnrd-type-badge"[^>]*>\s*(Pel[ií]cula|Serie|Anime)/i.exec(match[0]);
+    if (typeMatch) item.kind = /^serie|anime$/i.test(typeMatch[1]) ? "series" : "movie";
     const genreMatch = /class="gnrd-card-genres">([^<]*)<\/div>/i.exec(match[0]);
     item.siteGenres = genreMatch
       ? genreMatch[1].split("·").map((genre) => text(genre)).filter(Boolean)
@@ -73,6 +75,14 @@ function cards(html) {
     }
   }
   return out;
+}
+
+function trendCards(html, pane) {
+  const start = new RegExp('<div class="gnrd-trend-pane"[^>]*data-pane="' + pane + '"[^>]*>', "i").exec(html);
+  if (!start) return [];
+  const rest = html.slice(start.index + start[0].length);
+  const end = /<div class="gnrd-trend-pane"[^>]*data-pane="(?:sem|hoy)"/i.exec(rest);
+  return cards(end ? rest.slice(0, end.index) : rest);
 }
 
 function upcomingCards(html, type, mode) {
@@ -247,7 +257,8 @@ export async function home() {
 export async function section({ tab }) {
   await null;
   const tabs = [
-    { id: "novedades", label: "Novedades", labelEn: "New" },
+    { id: "tendencia-semanal", label: "Tendencia semanal", labelEn: "Trending this week" },
+    { id: "tendencia-hoy", label: "Tendencia de hoy", labelEn: "Trending today" },
     { id: "peliculas", label: "Películas", labelEn: "Movies" },
     { id: "series", label: "Series", labelEn: "Series" },
     { id: "anime", label: "Anime", labelEn: "Anime" },
@@ -261,6 +272,16 @@ export async function section({ tab }) {
     delete clean.siteGenres;
     return clean;
   };
+  if (["tendencia-semanal", "tendencia-hoy"].includes(chosen)) {
+    const html = await cachedGet(BASE + "/", "trend-home");
+    const pane = chosen === "tendencia-semanal" ? "sem" : "hoy";
+    const items = filterItems(trendCards(html, pane)).map(cleanItem);
+    return {
+      tabs,
+      tab: chosen,
+      rows: items.length ? [{ id: chosen, title: chosen === "tendencia-semanal" ? "Tendencia semanal" : "Tendencia de hoy", ref: "trend:" + pane, items: items.slice(0, 20) }] : [],
+    };
+  }
   if (["proximos", "estrenadas"].includes(chosen)) {
     const mode = chosen === "estrenadas" ? "released" : "next";
     const html = await get(upcomingUrl(mode, "all"));
@@ -277,8 +298,8 @@ export async function section({ tab }) {
       ].filter((row) => row.items.length),
     };
   }
-  if (["novedades", "peliculas", "series", "anime"].includes(chosen)) {
-    const wanted = chosen === "novedades" ? ["peliculas", "series", "anime"] : [chosen];
+  if (["peliculas", "series", "anime"].includes(chosen)) {
+    const wanted = [chosen];
     const typeRows = [];
     for (const row of allRows.filter((entry) => wanted.includes(entry.id))) {
       const items = row.items.map(cleanItem);
@@ -379,6 +400,12 @@ export async function browse(ref, cursor) {
     let items = await classifyCatalogItems(upcomingCards(html, "all", mode));
     if (type !== "all") items = items.filter((item) => type === "serie" ? item.kind === "series" : item.kind === "movie");
     return { items, next: hasNextPage(html, page) ? String(page + 1) : undefined };
+  }
+  const trend = /^trend:(sem|hoy)$/.exec(raw);
+  if (trend) {
+    const html = await cachedGet(BASE + "/", "trend-home");
+    const items = filterItems(trendCards(html, trend[1]));
+    return { items: items.map((item) => { delete item.siteGenres; return item; }) };
   }
   const ranked = /^ranked:(peliculas|series|anime)$/.exec(raw);
   if (ranked) {
