@@ -87,7 +87,7 @@ function upcomingCards(html, type, mode) {
     const imageMatch = /<img[^>]+src="([^"]+)"/i.exec(card);
     const dateMatch = /class="gnest-ecard-date">([^<]+)<\/span>/i.exec(card);
     if (!kindMatch || !hrefMatch || !titleMatch || !imageMatch) continue;
-    if (type && type !== "all" && kindMatch[1] !== type) continue;
+    if (type && type !== "all" && mode !== "released" && kindMatch[1] !== type) continue;
     const editorialRef = absoluteUrl(hrefMatch[1]);
     const ref = mode === "released"
       ? BASE + "/ver/" + slugFromUrl(editorialRef) + "/"
@@ -166,6 +166,18 @@ async function classifySearchItems(items) {
   return items;
 }
 
+async function classifyCatalogItems(items) {
+  const candidates = items.slice(0, 20);
+  await Promise.all(candidates.map(async (item) => {
+    try {
+      const html = await get(item.ref);
+      if (/<meta\s+name="description"\s+content="Pelicula\b/i.test(html) || /<[^>]*>Pelicula\s*[·|]/i.test(html)) item.kind = "movie";
+      if (/<meta\s+name="description"\s+content="Serie\b/i.test(html) || /<[^>]*>Serie\s*[·|]/i.test(html)) item.kind = "series";
+    } catch {}
+  }));
+  return items;
+}
+
 async function get(url) {
   const response = await kino.fetch(url);
   if (!response.ok) throw kino.error("unavailable", "La fuente no respondió");
@@ -237,7 +249,6 @@ export async function section({ tab }) {
     { id: "anime", label: "Anime", labelEn: "Anime" },
     { id: "proximos", label: "Próximos estrenos", labelEn: "Coming soon" },
     { id: "estrenadas", label: "Ya estrenadas", labelEn: "Released" },
-    { id: "generos", label: "Géneros", labelEn: "Genres" },
   ];
   const chosen = tabs.some((entry) => entry.id === tab) ? tab : "peliculas";
   const allRows = (await home()).map((row) => ({ ...row, items: filterItems(row.items) }));
@@ -249,7 +260,7 @@ export async function section({ tab }) {
   if (["proximos", "estrenadas"].includes(chosen)) {
     const mode = chosen === "estrenadas" ? "released" : "next";
     const html = await get(upcomingUrl(mode, "all"));
-    const all = upcomingCards(html, "all", mode);
+    const all = await classifyCatalogItems(upcomingCards(html, "all", mode));
     const movies = all.filter((item) => item.kind === "movie");
     const series = all.filter((item) => item.kind === "series");
     return {
@@ -361,7 +372,8 @@ export async function browse(ref, cursor) {
     const mode = upcoming[1];
     const type = upcoming[2];
     const html = await get(upcomingUrl(mode, type, page));
-    const items = upcomingCards(html, type, mode);
+    let items = await classifyCatalogItems(upcomingCards(html, "all", mode));
+    if (type !== "all") items = items.filter((item) => type === "serie" ? item.kind === "series" : item.kind === "movie");
     return { items, next: items.length >= 100 ? String(page + 1) : undefined };
   }
   const ranked = /^ranked:(peliculas|series|anime)$/.exec(raw);
@@ -471,7 +483,7 @@ function unpack(value) {
 
 async function playerServers(html, pageUrl) {
   const match = PLAYER_RE.exec(html);
-  if (!match) throw kino.error("not_found", "No hay servidores disponibles");
+  if (!match) return [];
   const endpoint = BASE + "/wp-json/gnrd/v1/player?id=" + match[1] + "&t=" + match[2];
   const response = await kino.fetch(endpoint, { headers: { "X-Gn-Scr": "kino", "Referer": pageUrl } });
   if (!response.ok) throw kino.error("unavailable", "No se pudo consultar el reproductor");
@@ -489,6 +501,10 @@ async function playerServers(html, pageUrl) {
 }
 
 async function capture(server) {
+  if (new URL(server.url).hostname === "voe.sx") {
+    const direct = await captureVoe(server.url);
+    if (direct) return direct;
+  }
   const page = await kino.browser.capture(server.url, { timeoutMs: 18000 });
   const media = page.media && page.media[0];
   if (!media) throw kino.error("unavailable", "El servidor no entregó video");
@@ -500,6 +516,63 @@ async function capture(server) {
   return { url: media.url, mime: media.mime, headers: media.headers, subtitles };
 }
 
+function rot13(value) {
+  return String(value).replace(/[a-z]/gi, (char) => {
+    const base = char <= "Z" ? 65 : 97;
+    return String.fromCharCode((char.charCodeAt(0) - base + 13) % 26 + base);
+  });
+}
+
+function decodeVoe(value) {
+  let encoded = rot13(value);
+  for (const junk of ["@$", "^^", "~@", "%?", "*~", "!!", "#&"]) encoded = encoded.split(junk).join("");
+  const first = atob(encoded);
+  const shifted = [...first].map((char) => String.fromCharCode(char.charCodeAt(0) - 3)).join("");
+  const reversed = [...shifted].reverse().join("");
+  return JSON.parse(decodeURIComponent(new TextDecoder().decode(Uint8Array.from(atob(reversed), (char) => char.charCodeAt(0)))));
+}
+
+async function captureVoe(url) {
+  try {
+    const response = await kino.fetch(url, { headers: { Referer: url }, timeoutMs: 8000 });
+    if (!response.ok) return null;
+    let html = response.text();
+    const redirect = /window\.location\.href\s*=\s*['"]([^'"]+)['"]/i.exec(html);
+    if (redirect) {
+      const next = await kino.fetch(redirect[1], { headers: { Referer: url }, timeoutMs: 8000 });
+      if (!next.ok) return null;
+      html = next.text();
+    }
+    if (/altcha|confirm you(?:'|&#0?39;|’)re human/i.test(html)) return null;
+    const encoded = /<script type="application\/json">\s*\["([^"]+)"\]/i.exec(html);
+    if (encoded) {
+      const data = decodeVoe(encoded[1]);
+      const stream = data.source || data.direct_access_url;
+      if (stream) return { url: stream, mime: /\.mp4(?:[?#]|$)/i.test(stream) ? "video/mp4" : "application/vnd.apple.mpegurl", headers: { Referer: url } };
+    }
+    const stream = /'hls'\s*:\s*'([^']+)'/i.exec(html) || /(https?:\/\/[^"'\s]+\.mp4[^"'\s]*)/i.exec(html);
+    return stream ? { url: stream[1], mime: /\.mp4(?:[?#]|$)/i.test(stream[1]) ? "video/mp4" : "application/vnd.apple.mpegurl", headers: { Referer: url } } : null;
+  } catch {
+    return null;
+  }
+}
+
+function trailerUrl(html) {
+  const match = /https?:\/\/(?:www\.)?youtube-nocookie\.com\/embed\/[^"'\s<]+/i.exec(html);
+  return match ? match[0].replace(/&amp;|&#038;/gi, "&") : null;
+}
+
+async function captureTrailer(html) {
+  const embed = trailerUrl(html);
+  if (!embed) return null;
+  const page = await kino.browser.capture(embed, {
+    timeoutMs: 18000,
+    match: "\\.m3u8|videoplayback|googlevideo|\\.mp4",
+  });
+  const media = page.media && page.media[0];
+  return media ? { url: media.url, mime: media.mime, headers: media.headers, label: "Tráiler" } : null;
+}
+
 export async function resolve(ref) {
   await null;
   const separator = String(ref).lastIndexOf("|");
@@ -508,6 +581,11 @@ export async function resolve(ref) {
   const pageUrl = absoluteUrl(pageRef);
   const html = await get(pageUrl);
   const allServers = await playerServers(html, pageUrl);
+  if (!allServers.length) {
+    const trailer = await captureTrailer(html);
+    if (trailer) return trailer;
+    throw kino.error("not_found", "No hay servidores ni tráiler disponible");
+  }
   const servers = selected === null ? allServers : [allServers[selected]].filter(Boolean);
   if (!servers.length) throw kino.error("unavailable", "No hay servidores disponibles");
   let firstError;
