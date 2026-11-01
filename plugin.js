@@ -153,6 +153,10 @@ function newestFirst(items) {
   return [...items].sort((a, b) => Number(b.year || 0) - Number(a.year || 0));
 }
 
+function hasNextPage(html, page) {
+  return new RegExp("[?&]page=" + (page + 1) + "(?:[^0-9]|$)").test(html);
+}
+
 async function classifySearchItems(items) {
   const candidates = items.slice(0, 20);
   await Promise.all(candidates.map(async (item) => {
@@ -374,35 +378,38 @@ export async function browse(ref, cursor) {
     const html = await get(upcomingUrl(mode, type, page));
     let items = await classifyCatalogItems(upcomingCards(html, "all", mode));
     if (type !== "all") items = items.filter((item) => type === "serie" ? item.kind === "series" : item.kind === "movie");
-    return { items, next: items.length >= 100 ? String(page + 1) : undefined };
+    return { items, next: hasNextPage(html, page) ? String(page + 1) : undefined };
   }
   const ranked = /^ranked:(peliculas|series|anime)$/.exec(raw);
   if (ranked) {
     const path = "/ver/" + (ranked[1] === "peliculas" ? "peliculas" : ranked[1]) + "/";
     const rankedPage = page > 1 ? path + "?page=" + page : path;
-    const items = filterItems(cards(await get(BASE + rankedPage))).sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+    const html = await get(BASE + rankedPage);
+    const items = filterItems(cards(html)).sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
     return {
       items: items.slice(0, 20).map((item) => { delete item.siteGenres; return item; }),
-      next: items.length >= 20 ? String(page + 1) : undefined,
+      next: hasNextPage(html, page) ? String(page + 1) : undefined,
     };
   }
   const yearList = /^year:(peliculas|series|anime):(\d{4})$/.exec(raw);
   if (yearList) {
     const path = "/ver/" + (yearList[1] === "peliculas" ? "peliculas" : yearList[1]) + "/";
     const pageUrl = page > 1 ? path + "?page=" + page : path;
-    const source = cards(await get(BASE + pageUrl));
+    const html = await get(BASE + pageUrl);
+    const source = cards(html);
     const items = filterItems(source).filter((item) => item.year === yearList[2]);
     return {
       items: items.slice(0, 20).map((item) => { delete item.siteGenres; return item; }),
-      next: source.length >= 100 ? String(page + 1) : undefined,
+      next: hasNextPage(html, page) ? String(page + 1) : undefined,
     };
   }
   let path = lists[raw.replace(/^\/list\//, "")] || null;
   if (!path && raw.startsWith("genre:")) path = "/genres/" + raw.slice(6) + "/";
   if (!path) throw kino.error("not_found", "Categoría inválida");
   const separator = path.includes("?") ? "&" : "?";
-  const items = filterItems(cards(await get(BASE + path + separator + "page=" + page)));
-  return { items: items.map((item) => { delete item.siteGenres; return item; }), next: items.length === 100 ? String(page + 1) : undefined };
+  const html = await get(BASE + path + separator + "page=" + page);
+  const items = filterItems(cards(html));
+  return { items: items.map((item) => { delete item.siteGenres; return item; }), next: hasNextPage(html, page) ? String(page + 1) : undefined };
 }
 
 function jsonLd(html) {
@@ -567,12 +574,21 @@ function trailerUrl(html) {
 async function captureTrailer(html) {
   const embed = trailerUrl(html);
   if (!embed) return null;
-  const page = await kino.browser.capture(embed, {
-    timeoutMs: 18000,
-    match: "\\.m3u8|videoplayback|googlevideo|\\.mp4",
-  });
-  const media = page.media && page.media[0];
-  return media ? { url: media.url, mime: media.mime, headers: media.headers, label: "Tráiler" } : null;
+  const id = /\/embed\/([^?&#/]+)/i.exec(embed);
+  const candidates = [embed];
+  if (id) candidates.push("https://www.youtube.com/embed/" + id[1] + "?autoplay=1&playsinline=1");
+  for (const candidate of candidates) {
+    try {
+      const page = await kino.browser.capture(candidate, {
+        timeoutMs: 25000,
+        autoplay: true,
+        match: "\\.m3u8|videoplayback|googlevideo|\\.mp4",
+      });
+      const media = page.media && page.media[0];
+      if (media) return { url: media.url, mime: media.mime, headers: media.headers, label: "Tráiler" };
+    } catch {}
+  }
+  return null;
 }
 
 export async function resolve(ref) {
