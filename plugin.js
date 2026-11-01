@@ -501,11 +501,13 @@ async function playerServers(html, pageUrl) {
 }
 
 async function capture(server) {
-  if (new URL(server.url).hostname === "voe.sx") {
+  const isVoe = new URL(server.url).hostname === "voe.sx";
+  if (isVoe) {
     const direct = await captureVoe(server.url);
+    if (direct === false) return null;
     if (direct) return direct;
   }
-  const page = await kino.browser.capture(server.url, { timeoutMs: 18000 });
+  const page = await kino.browser.capture(server.url, { timeoutMs: isVoe ? 25000 : 18000 });
   const media = page.media && page.media[0];
   if (!media) throw kino.error("unavailable", "El servidor no entregó video");
   const subtitles = (page.subtitles || []).map((subtitle) => ({
@@ -535,12 +537,12 @@ function decodeVoe(value) {
 async function captureVoe(url) {
   try {
     const response = await kino.fetch(url, { headers: { Referer: url }, timeoutMs: 8000 });
-    if (!response.ok) return null;
+    if (!response.ok) return false;
     let html = response.text();
     const redirect = /window\.location\.href\s*=\s*['"]([^'"]+)['"]/i.exec(html);
     if (redirect) {
       const next = await kino.fetch(redirect[1], { headers: { Referer: url }, timeoutMs: 8000 });
-      if (!next.ok) return null;
+      if (!next.ok) return false;
       html = next.text();
     }
     if (/altcha|confirm you(?:'|&#0?39;|’)re human/i.test(html)) return null;
@@ -587,11 +589,16 @@ export async function resolve(ref) {
     throw kino.error("not_found", "No hay servidores ni tráiler disponible");
   }
   const servers = selected === null ? allServers : [allServers[selected]].filter(Boolean);
-  if (!servers.length) throw kino.error("unavailable", "No hay servidores disponibles");
+  if (!servers.length) throw kino.error("unavailable", "No hay servidores seguros disponibles", { userMessage: "Este título no tiene un servidor seguro disponible." });
   let firstError;
   for (const server of servers.slice(0, 3)) {
     try {
       const stream = await capture(server);
+      if (!stream) {
+        firstError = kino.error("unavailable", "El servidor no está disponible");
+        try { kino.log("server unavailable", server.label); } catch {}
+        continue;
+      }
       const response = { ...stream, label: server.label };
       if (stream.subtitles && !stream.subtitles.length) delete response.subtitles;
       if (selected === null) {
@@ -605,8 +612,9 @@ export async function resolve(ref) {
       return response;
     } catch (error) {
       firstError = error;
+      try { kino.log("server failed", server.label, error.code || "error"); } catch {}
       if (!["blocked", "timeout", "browser_unavailable"].includes(error.code)) throw error;
     }
   }
-  throw firstError || kino.error("unavailable", "No respondió ningún servidor");
+  throw firstError || kino.error("unavailable", "No respondió ningún servidor", { userMessage: "Ningún servidor seguro respondió para este título." });
 }
