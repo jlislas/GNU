@@ -444,7 +444,9 @@ export async function browse(ref, cursor) {
     const path = "/ver/" + (ranked[1] === "peliculas" ? "peliculas" : ranked[1]) + "/";
     const rankedPage = page > 1 ? path + "?page=" + page : path;
     const html = await get(BASE + rankedPage);
-    const items = filterItems(cards(html)).sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+    const rankedKind = ranked[1] === "series" || ranked[1] === "anime" ? "series" : "movie";
+    const items = filterItems(cards(html).map((item) => ({ ...item, kind: rankedKind })));
+    items.sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
     return {
       items: items.slice(0, 20).map((item) => { delete item.siteGenres; return item; }),
       next: hasNextPage(html, page) ? String(page + 1) : undefined,
@@ -455,7 +457,8 @@ export async function browse(ref, cursor) {
     const path = "/ver/" + (yearList[1] === "peliculas" ? "peliculas" : yearList[1]) + "/";
     const pageUrl = page > 1 ? path + "?page=" + page : path;
     const html = await get(BASE + pageUrl);
-    const source = cards(html);
+    const yearKind = yearList[1] === "series" || yearList[1] === "anime" ? "series" : "movie";
+    const source = cards(html).map((item) => ({ ...item, kind: yearKind }));
     const items = filterItems(source).filter((item) => item.year === yearList[2]);
     return {
       items: items.slice(0, 20).map((item) => { delete item.siteGenres; return item; }),
