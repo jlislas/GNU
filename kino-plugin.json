@@ -1,7 +1,7 @@
 {
   "id": "gnu-gnula",
   "name": "Gnu",
-  "version": "0.2.14",
+  "version": "0.3.0",
   "apiVersion": 8,
   "entry": "plugin.js",
   "description": "Películas, series y anime de GNULA HD",
@@ -35,6 +35,28 @@
   "section": {
     "label": "Gnu",
     "labelEn": "Gnu"
+  },
+  "enhancements": {
+    "14": {
+      "capabilities": [
+        "screen"
+      ],
+      "screen": {
+        "label": "Gnu",
+        "labelEn": "Gnu",
+        "icon": "movie",
+        "menuOpens": "screen",
+        "opensFrom": [
+          "menu",
+          "settings"
+        ],
+        "settingsIn": "screen",
+        "settingsButton": {
+          "label": "Abrir Gnu",
+          "labelEn": "Open Gnu"
+        }
+      }
+    }
   },
   "settings": [
     {
@@ -280,6 +302,6 @@
   ],
   "signature": {
     "authorKey": "d28deb8326c4fe720294a081cacb1efa40c15791e7e8c094cdad6ff94d5ed4d3",
-    "value": "c35f71fe2e316273000fa7b6e775def70d77d8744868f8f3611c5b8106ebf23149c13679de2ae90f81509ed1c337289c44ab3d2eff57ed11691e2893cf063803"
+    "value": "0eeac2cf2fdc0294bb1182efa4f4cb87e69df7da8988822dfa59d2e8f4ec3cba6e9a4551f472513a7236e298ffac9a44e96bde157c9d9f7f5180a536c2f6700b"
   }
 }

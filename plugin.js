@@ -413,6 +413,97 @@ export async function section({ tab }) {
   };
 }
 
+const SCREEN_TABS = [
+  { id: "inicio", label: "Inicio", labelEn: "Home" },
+  { id: "peliculas", label: "Películas", labelEn: "Movies" },
+  { id: "series", label: "Series", labelEn: "Series" },
+  { id: "anime", label: "Anime", labelEn: "Anime" },
+  { id: "tendencia-semanal", label: "Tendencia semanal", labelEn: "Trending this week" },
+  { id: "tendencia-hoy", label: "Tendencia de hoy", labelEn: "Trending today" },
+  { id: "proximos", label: "Próximos estrenos", labelEn: "Coming soon" },
+  { id: "estrenadas", label: "Ya estrenadas", labelEn: "Released" },
+];
+
+function screenPage(tab, rows) {
+  const slides = [];
+  const seen = new Set();
+  for (const row of rows) {
+    for (const item of row.items || []) {
+      if (slides.length >= 6 || seen.has(item.id) || !item.poster) continue;
+      seen.add(item.id);
+      slides.push({
+        id: item.id,
+        ref: item.ref,
+        kind: item.kind || "movie",
+        title: item.title,
+        image: item.poster,
+        text: [item.year, item.rating ? `★ ${item.rating}` : ""].filter(Boolean).join(" · "),
+      });
+    }
+  }
+  const heroCard = (slide) => ({
+    type: "heroCard",
+    key: "hero-" + slide.id,
+    h: { compact: 200, expanded: 280 },
+    title: slide.title,
+    text: slide.text,
+    image: slide.image,
+    buttons: [{
+      type: "ElevatedButton",
+      key: "watch-" + slide.id,
+      labelText: "Ver",
+      labelTextEn: "Watch",
+      icon: "play",
+      onPressed: { go: { play: { ref: slide.ref, kind: slide.kind, id: slide.id, title: slide.title } } },
+    }],
+  });
+  const body = [];
+  if (slides.length === 1) body.push(heroCard(slides[0]));
+  if (slides.length > 1) body.push({ type: "PageView", key: "featured", autoPlayMs: 6000, children: slides.map(heroCard) });
+  for (const row of rows.slice(0, 10)) {
+    if (!row.items || !row.items.length) continue;
+    body.push({
+      type: "titleRail",
+      key: "rail-" + row.id,
+      title: row.title,
+      ref: row.ref,
+      items: row.items.slice(0, 24),
+    });
+  }
+  return {
+    type: "Scaffold",
+    appBar: {
+      type: "AppBar",
+      title: {
+        type: "TabBar",
+        value: tab,
+        onChanged: "tab",
+        tabs: SCREEN_TABS.map(({ id, label, labelEn }) => ({ value: id, label, labelEn })),
+      },
+    },
+    body: {
+      type: "SingleChildScrollView",
+      key: "screen-" + tab,
+      children: [{ type: "Column", gap: 16, padding: { compact: 12, expanded: 24 }, children: body }],
+    },
+  };
+}
+
+export async function screen(context = {}) {
+  const state = context.state && typeof context.state === "object" ? context.state : {};
+  const tab = SCREEN_TABS.some((entry) => entry.id === state.tab) ? state.tab : "inicio";
+  const page = tab === "inicio" ? { rows: await home() } : await section({ tab });
+  return screenPage(tab, page.rows || []);
+}
+
+export async function screenEvent(event = {}) {
+  if (event.name !== "tab") return null;
+  const tab = SCREEN_TABS.some((entry) => entry.id === event.value || entry.id === event.arg)
+    ? (event.value || event.arg)
+    : "inicio";
+  return { state: { tab } };
+}
+
 export async function browse(ref, cursor) {
   await null;
   const page = Number(cursor || 1);
