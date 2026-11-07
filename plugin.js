@@ -467,7 +467,11 @@ export async function browse(ref, cursor) {
   if (!path) throw kino.error("not_found", "Categoría inválida");
   const separator = path.includes("?") ? "&" : "?";
   const html = await get(BASE + path + separator + "page=" + page);
-  const items = filterItems(cards(html));
+  const listName = raw.replace(/^\/list\//, "");
+  const listKind = listName === "series" || listName === "anime"
+    ? "series"
+    : listName === "peliculas" ? "movie" : undefined;
+  const items = filterItems(cards(html).map((item) => listKind ? { ...item, kind: listKind } : item));
   return { items: items.map((item) => { delete item.siteGenres; return item; }), next: hasNextPage(html, page) ? String(page + 1) : undefined };
 }
 
