@@ -444,7 +444,7 @@ const SCREEN_TABS = [
   { id: "estrenadas", label: "Ya estrenadas", labelEn: "Released" },
 ];
 
-function screenPage(tab, rows) {
+function screenPage(tab, rows, query = "", searchItems = [], searchFailed = false) {
   const slides = [];
   const seen = new Set();
   for (const row of rows) {
@@ -477,19 +477,44 @@ function screenPage(tab, rows) {
       onPressed: { go: { play: { ref: slide.ref, kind: slide.kind, id: slide.id, title: slide.title } } },
     }],
   });
-  const body = [];
-  if (slides.length === 1) body.push(heroCard(slides[0]));
-  if (slides.length > 1) body.push({ type: "PageView", key: "featured", autoPlayMs: 6000, children: slides.map(heroCard) });
-  for (const row of rows.slice(0, 10)) {
-    if (!row.items || !row.items.length) continue;
-    body.push({
-      type: "titleRail",
-      key: "rail-" + row.id,
-      title: row.title,
-      size: "small",
-      ref: row.ref,
-      items: row.items.slice(0, 24),
-    });
+  const body = [{
+    type: "TextField",
+    key: "screen-search",
+    kind: "search",
+    labelText: "Buscar",
+    labelTextEn: "Search",
+    hintText: "Una película o serie",
+    hintTextEn: "A movie or series",
+    maxLength: 100,
+    onSubmitted: "search",
+    trailingIcon: "search",
+    trailingLabel: "Buscar",
+    trailingLabelEn: "Search",
+    onTrailingTap: "search",
+  }];
+  if (query) {
+    body.push({ type: "Text", key: "search-title", text: `Resultados para: ${query}`, style: "h3" });
+    if (searchFailed) {
+      body.push({ type: "errorState", title: "No se pudo buscar", text: "La fuente no respondió. Intenta nuevamente." });
+    } else if (searchItems.length) {
+      body.push({ type: "titleGrid", key: "search-results", columns: { compact: 2, medium: 4, expanded: 6 }, items: searchItems.slice(0, 60) });
+    } else {
+      body.push({ type: "emptyState", title: "Sin resultados", text: "No encontramos títulos para esa búsqueda." });
+    }
+  } else {
+    if (slides.length === 1) body.push(heroCard(slides[0]));
+    if (slides.length > 1) body.push({ type: "PageView", key: "featured", autoPlayMs: 6000, children: slides.map(heroCard) });
+    for (const row of rows.slice(0, 10)) {
+      if (!row.items || !row.items.length) continue;
+      body.push({
+        type: "titleRail",
+        key: "rail-" + row.id,
+        title: row.title,
+        size: "small",
+        ref: row.ref,
+        items: row.items.slice(0, 24),
+      });
+    }
   }
   return {
     type: "Scaffold",
@@ -513,11 +538,23 @@ function screenPage(tab, rows) {
 export async function screen(context = {}) {
   const state = context.state && typeof context.state === "object" ? context.state : {};
   const tab = SCREEN_TABS.some((entry) => entry.id === state.tab) ? state.tab : "inicio";
+  const query = typeof state.query === "string" ? state.query.trim().slice(0, 100) : "";
+  if (query) {
+    try {
+      return screenPage(tab, [], query, await search({ q: query, type: "any" }));
+    } catch {
+      return screenPage(tab, [], query, [], true);
+    }
+  }
   const page = tab === "inicio" ? { rows: await home() } : await section({ tab });
   return screenPage(tab, page.rows || []);
 }
 
 export async function screenEvent(event = {}) {
+  if (event.name === "search") {
+    const query = String(event.state && event.state.inputs && event.state.inputs["screen-search"] || "").trim().slice(0, 100);
+    return { state: { query, inputs: { "screen-search": "" } } };
+  }
   if (event.name !== "tab") return null;
   const tab = SCREEN_TABS.some((entry) => entry.id === event.value || entry.id === event.arg)
     ? (event.value || event.arg)
