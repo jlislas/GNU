@@ -102,7 +102,12 @@ function homepageRows(html) {
     const title = text(titleMatch[1]);
     if (!title || /^tendencias$/i.test(title)) continue;
     const viewMatch = /class="gnrd-viewall"[^>]+href="([^"]+)"/i.exec(body);
-    const items = /próximos|estrenos/i.test(title) ? upcomingCards(body, "all", "next") : cards(body);
+    const rowKind = /\b(?:series|anime)\b/i.test(title)
+      ? "series"
+      : /\bpel[ií]culas\b/i.test(title) ? "movie" : undefined;
+    const items = /próximos|estrenos/i.test(title)
+      ? upcomingCards(body, "all", "next")
+      : cards(body).map((item) => rowKind ? { ...item, kind: rowKind } : item);
     if (!items.length) continue;
     let ref;
     if (viewMatch) {
@@ -114,7 +119,8 @@ function homepageRows(html) {
       else if (/\/ver\/series/i.test(path)) ref = "/list/series";
       else if (/\/ver\/anime/i.test(path)) ref = "/list/anime";
     }
-    rows.push({ id: "home-" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-"), title, ref, items: filterItems(items.map((item) => ({ ...item, siteGenres: item.siteGenres || [] }))).slice(0, 20) });
+    const id = "home-" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    rows.push({ id, title, ref: "home-row:" + id, items: filterItems(items.map((item) => ({ ...item, siteGenres: item.siteGenres || [] }))).slice(0, 20) });
   }
   return rows.filter((row) => row.items.length);
 }
@@ -434,14 +440,13 @@ export async function section({ tab }) {
 }
 
 const SCREEN_TABS = [
-  { id: "inicio", label: "Inicio", labelEn: "Home" },
+  { id: "tendencia-hoy", label: "Inicio", labelEn: "Home" },
+  { id: "estrenadas", label: "Ya estrenadas", labelEn: "Released" },
+  { id: "tendencia-semanal", label: "Tendencia semanal", labelEn: "Trending this week" },
   { id: "peliculas", label: "Películas", labelEn: "Movies" },
   { id: "series", label: "Series", labelEn: "Series" },
   { id: "anime", label: "Anime", labelEn: "Anime" },
-  { id: "tendencia-semanal", label: "Tendencia semanal", labelEn: "Trending this week" },
-  { id: "tendencia-hoy", label: "Tendencia de hoy", labelEn: "Trending today" },
   { id: "proximos", label: "Próximos estrenos", labelEn: "Coming soon" },
-  { id: "estrenadas", label: "Ya estrenadas", labelEn: "Released" },
 ];
 
 function screenPage(tab, rows, query = "", searchItems = [], searchFailed = false) {
@@ -537,7 +542,7 @@ function screenPage(tab, rows, query = "", searchItems = [], searchFailed = fals
 
 export async function screen(context = {}) {
   const state = context.state && typeof context.state === "object" ? context.state : {};
-  const tab = SCREEN_TABS.some((entry) => entry.id === state.tab) ? state.tab : "inicio";
+  const tab = SCREEN_TABS.some((entry) => entry.id === state.tab) ? state.tab : "tendencia-hoy";
   const query = typeof state.query === "string" ? state.query.trim().slice(0, 100) : "";
   if (query) {
     try {
@@ -546,7 +551,7 @@ export async function screen(context = {}) {
       return screenPage(tab, [], query, [], true);
     }
   }
-  const page = tab === "inicio" ? { rows: await home() } : await section({ tab });
+  const page = await section({ tab });
   return screenPage(tab, page.rows || []);
 }
 
@@ -558,7 +563,7 @@ export async function screenEvent(event = {}) {
   if (event.name !== "tab") return null;
   const tab = SCREEN_TABS.some((entry) => entry.id === event.value || entry.id === event.arg)
     ? (event.value || event.arg)
-    : "inicio";
+    : "tendencia-hoy";
   return { state: { tab } };
 }
 
@@ -573,6 +578,13 @@ export async function browse(ref, cursor) {
     proximos: "/proximos-estrenos/",
   };
   const raw = String(ref || "list:peliculas");
+  const homeRow = /^home-row:(.+)$/.exec(raw);
+  if (homeRow) {
+    const html = await get(BASE + "/");
+    const row = homepageRows(html).find((entry) => entry.id === homeRow[1]);
+    if (!row) throw kino.error("not_found", "Fila no encontrada");
+    return { items: row.items.map((item) => { const clean = { ...item }; delete clean.siteGenres; return clean; }) };
+  }
   const upcoming = /^upcoming:(next|released):(all|pelicula|serie)$/.exec(raw);
   if (upcoming) {
     const mode = upcoming[1];
