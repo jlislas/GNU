@@ -12,7 +12,7 @@ const BASE = SOURCE_BASES[0];
 const CARD_RE = /<a\s+class="gnrd-card"\s+href="([^"]+)"\s+title="([^"]*)"[\s\S]*?<img[^>]+src="([^"]+)"[\s\S]*?<\/a>/gi;
 const EP_RE = /<a\s+class="gnrd-epc"\s+href="([^"]+)"[^>]*data-s="(\d+)"[^>]*data-e="(\d+)"[\s\S]*?<span class="gnrd-epc-title">([^<]*)<\/span>/gi;
 const PLAYER_RE = /var\s+_gnrdPid\s*=\s*(\d+)\s*,\s*_gnrdTok\s*=\s*"([a-f0-9]+)"/i;
-const SAFE_SERVER_HOSTS = new Set(["bysevepoin.com", "vidara.to", "voe.sx"]);
+const SAFE_SERVER_HOSTS = new Set(["vidara.to", "voe.sx"]);
 const UPCOMING_RE = /<a\s+class="gnrd-card\s+gnest-ecard"([\s\S]*?)<\/a>/gi;
 
 function text(value) {
@@ -577,12 +577,15 @@ export async function browse(ref, cursor) {
       next: hasNextPage(html, page) ? String(page + 1) : undefined,
     };
   }
-  let path = lists[raw.replace(/^\/list\//, "")] || null;
+  const listName = raw
+    .replace(/^\/list\//, "")
+    .replace(/^\/ver\//, "")
+    .replace(/\/+$/, "");
+  let path = lists[listName] || null;
   if (!path && raw.startsWith("genre:")) path = "/genres/" + raw.slice(6) + "/";
   if (!path) throw kino.error("not_found", "Categoría inválida");
   const separator = path.includes("?") ? "&" : "?";
   const html = await get(BASE + path + separator + "page=" + page);
-  const listName = raw.replace(/^\/list\//, "");
   const listKind = listName === "series" || listName === "anime"
     ? "series"
     : listName === "peliculas" ? "movie" : undefined;
