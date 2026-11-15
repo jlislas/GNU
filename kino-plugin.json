@@ -1,7 +1,7 @@
 {
   "id": "gnu-gnula",
   "name": "Gnu",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "apiVersion": 8,
   "entry": "plugin.js",
   "description": "Películas, series y anime de GNULA HD",
@@ -10,6 +10,9 @@
   "hosts": [
     "gnulahd.nu",
     "*.gnulahd.nu",
+    "dominiosgnulahd.com",
+    "gnulahd.click",
+    "gnulahd.bid",
     "image.tmdb.org",
     "i0.wp.com",
     "i1.wp.com",
@@ -302,6 +305,6 @@
   ],
   "signature": {
     "authorKey": "d28deb8326c4fe720294a081cacb1efa40c15791e7e8c094cdad6ff94d5ed4d3",
-    "value": "09ea5c5c8cf88f27be0db3aa8a79efe4e8e0cd6368db82c538ec1eb48927e390324b00d86e0ce39b9765a242e47fef882c3af6e20e9150d22670d5411d8faa0f"
+    "value": "0f6ea1111414b35d69498ed3a65cc68fdb66bcde6ef6907f7a2dff5d0b8934890f85618027233be0588ac8737225f290478fe6b8b98a22c86b2fd12293721002"
   }
 }

@@ -2,7 +2,13 @@
 // La página fuente entrega los metadatos y los servidores; Kino captura el
 // media del reproductor autorizado sin resolver captchas ni saltarse controles.
 
-const BASE = "https://ww3.gnulahd.nu";
+const SOURCE_BASES = [
+  "https://ww3.gnulahd.nu",
+  "https://gnulahd.click",
+  "https://gnulahd.bid",
+];
+const SOURCE_HOSTS = new Set(SOURCE_BASES.map((base) => new URL(base).hostname));
+const BASE = SOURCE_BASES[0];
 const CARD_RE = /<a\s+class="gnrd-card"\s+href="([^"]+)"\s+title="([^"]*)"[\s\S]*?<img[^>]+src="([^"]+)"[\s\S]*?<\/a>/gi;
 const EP_RE = /<a\s+class="gnrd-epc"\s+href="([^"]+)"[^>]*data-s="(\d+)"[^>]*data-e="(\d+)"[\s\S]*?<span class="gnrd-epc-title">([^<]*)<\/span>/gi;
 const PLAYER_RE = /var\s+_gnrdPid\s*=\s*(\d+)\s*,\s*_gnrdTok\s*=\s*"([a-f0-9]+)"/i;
@@ -220,10 +226,24 @@ async function classifyCatalogItems(items) {
   return items;
 }
 
+function sourceCandidates(url) {
+  const parsed = new URL(url, BASE);
+  if (!SOURCE_HOSTS.has(parsed.hostname)) return [parsed.href];
+  return SOURCE_BASES.map((base) => new URL(parsed.pathname + parsed.search + parsed.hash, base).href);
+}
+
 async function get(url) {
-  const response = await kino.fetch(url);
-  if (!response.ok) throw kino.error("unavailable", "La fuente no respondió");
-  return response.text();
+  let lastError;
+  for (const candidate of sourceCandidates(url)) {
+    try {
+      const response = await kino.fetch(candidate);
+      if (response.ok) return response.text();
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || kino.error("unavailable", "La fuente no respondió");
 }
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -649,10 +669,23 @@ function unpack(value) {
 async function playerServers(html, pageUrl) {
   const match = PLAYER_RE.exec(html);
   if (!match) return [];
-  const endpoint = BASE + "/wp-json/gnrd/v1/player?id=" + match[1] + "&t=" + match[2];
-  const response = await kino.fetch(endpoint, { headers: { "X-Gn-Scr": "kino", "Referer": pageUrl } });
-  if (!response.ok) throw kino.error("unavailable", "No se pudo consultar el reproductor");
-  const data = unpack(response.json().p);
+  const endpoint = new URL("/wp-json/gnrd/v1/player?id=" + match[1] + "&t=" + match[2], pageUrl).href;
+  let data;
+  let lastError;
+  for (const candidate of sourceCandidates(endpoint)) {
+    try {
+      const response = await kino.fetch(candidate, { headers: { "X-Gn-Scr": "kino", "Referer": pageUrl } });
+      if (!response.ok) {
+        lastError = new Error(`HTTP ${response.status}`);
+        continue;
+      }
+      data = unpack(response.json().p);
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!data) throw lastError || kino.error("unavailable", "No se pudo consultar el reproductor");
   const servers = (data.langs || []).flatMap((language) => (language.servers || []).map((server) => ({
     label: `${language.label || "Video"} · ${server.title || "Servidor"}`,
     url: server.src,
@@ -765,7 +798,7 @@ export async function resolve(ref) {
   const servers = selected === null ? allServers : [allServers[selected]].filter(Boolean);
   if (!servers.length) throw kino.error("unavailable", "No hay servidores seguros disponibles", { userMessage: "Este título no tiene un servidor seguro disponible." });
   let firstError;
-  for (const server of servers.slice(0, 3)) {
+  for (const server of servers) {
     try {
       const stream = await capture(server);
       if (!stream) {
@@ -787,7 +820,8 @@ export async function resolve(ref) {
     } catch (error) {
       firstError = error;
       try { kino.log("server failed", server.label, error.code || "error"); } catch {}
-      if (!["blocked", "timeout", "browser_unavailable"].includes(error.code)) throw error;
+      // Un servidor puede fallar por una causa que Kino no clasifica. Eso no
+      // debe impedir probar los demás servidores permitidos.
     }
   }
   throw firstError || kino.error("unavailable", "No respondió ningún servidor", { userMessage: "Ningún servidor seguro respondió para este título." });
