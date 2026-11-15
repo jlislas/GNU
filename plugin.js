@@ -466,6 +466,7 @@ function screenPage(tab, rows) {
       type: "titleRail",
       key: "rail-" + row.id,
       title: row.title,
+      size: "small",
       ref: row.ref,
       items: row.items.slice(0, 24),
     });
