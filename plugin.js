@@ -9,7 +9,7 @@ const SOURCE_BASES = [
 ];
 const SOURCE_HOSTS = new Set(SOURCE_BASES.map((base) => new URL(base).hostname));
 const BASE = SOURCE_BASES[0];
-const CARD_RE = /<a\s+class="gnrd-card"\s+href="([^"]+)"\s+title="([^"]*)"[\s\S]*?<img[^>]+src="([^"]+)"[\s\S]*?<\/a>/gi;
+const CARD_RE = /<a\b(?=[^>]*\bclass="[^"]*\bgnrd-card\b[^"]*")([^>]*)>([\s\S]*?)<\/a>/gi;
 const EP_RE = /<a\s+class="gnrd-epc"\s+href="([^"]+)"[^>]*data-s="(\d+)"[^>]*data-e="(\d+)"[\s\S]*?<span class="gnrd-epc-title">([^<]*)<\/span>/gi;
 const PLAYER_RE = /var\s+_gnrdPid\s*=\s*(\d+)\s*,\s*_gnrdTok\s*=\s*"([a-f0-9]+)"/i;
 const SAFE_SERVER_HOSTS = new Set(["vidara.to", "voe.sx"]);
@@ -22,6 +22,11 @@ function text(value) {
     .replace(/&amp;/gi, "&")
     .replace(/<[^>]*>/g, "")
     .trim();
+}
+
+function attribute(attrs, name) {
+  const match = new RegExp("\\b" + name + "\\s*=\\s*([\\\"'])(.*?)\\1", "i").exec(attrs);
+  return match ? match[2] : "";
 }
 
 function slugFromUrl(url) {
@@ -59,19 +64,25 @@ function cards(html) {
   const seen = new Set();
   let match;
   while ((match = CARD_RE.exec(html)) && out.length < 100) {
-    const yearMatch = /class="gnrd-card-metaline"[^>]*>[\s\S]*?<span>(\d{4})<\/span>/i.exec(match[0]);
-    const ratingMatch = /class="gnrd-rating"[^>]*>\s*[★☆]?\s*([\d]+(?:[.,]\d+)?)/i.exec(match[0])
-      || /class="gnrd-cm-rating"[^>]*>\s*[★☆]?\s*([\d]+(?:[.,]\d+)?)/i.exec(match[0]);
+    const attrs = match[1];
+    const body = match[2];
+    const href = attribute(attrs, "href");
+    const title = attribute(attrs, "title") || /class="gnrd-card-title"[^>]*>([^<]*)<\/span>/i.exec(body)?.[1] || "";
+    const poster = /<img\b[^>]*\bsrc="([^"]+)"/i.exec(body)?.[1] || "";
+    if (!href || !poster) continue;
+    const yearMatch = /class="gnrd-card-metaline"[^>]*>[\s\S]*?<span>(\d{4})<\/span>/i.exec(body);
+    const ratingMatch = /class="gnrd-rating"[^>]*>\s*[★☆]?\s*([\d]+(?:[.,]\d+)?)/i.exec(body)
+      || /class="gnrd-cm-rating"[^>]*>\s*[★☆]?\s*([\d]+(?:[.,]\d+)?)/i.exec(body);
     const item = itemFromCard(
-      match[1],
-      match[2],
-      match[3],
+      href,
+      title,
+      poster,
       yearMatch && yearMatch[1],
       ratingMatch ? Number(ratingMatch[1].replace(",", ".")) : undefined,
     );
-    const typeMatch = /class="gnrd-type-badge"[^>]*>\s*(Pel[ií]cula|Serie|Anime)/i.exec(match[0]);
+    const typeMatch = /class="gnrd-type-badge"[^>]*>\s*(Pel[ií]cula|Serie|Anime)/i.exec(body);
     if (typeMatch) item.kind = /^serie|anime$/i.test(typeMatch[1]) ? "series" : "movie";
-    const genreMatch = /class="gnrd-card-genres">([^<]*)<\/div>/i.exec(match[0]);
+    const genreMatch = /class="gnrd-card-genres">([^<]*)<\/div>/i.exec(body);
     item.siteGenres = genreMatch
       ? genreMatch[1].split("·").map((genre) => text(genre)).filter(Boolean)
       : [];
