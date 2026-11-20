@@ -458,6 +458,7 @@ const SCREEN_TABS = [
   { id: "series", label: "Series", labelEn: "Series" },
   { id: "anime", label: "Anime", labelEn: "Anime" },
   { id: "proximos", label: "Próximos estrenos", labelEn: "Coming soon" },
+  { id: "buscar", label: "Buscar", labelEn: "Search" },
 ];
 
 function screenPage(tab, rows, query = "", searchItems = [], searchFailed = false) {
@@ -493,7 +494,8 @@ function screenPage(tab, rows, query = "", searchItems = [], searchFailed = fals
       onPressed: { go: { play: { ref: slide.ref, kind: slide.kind, id: slide.id, title: slide.title } } },
     }],
   });
-  const body = [{
+  const body = [];
+  if (tab === "buscar") body.push({
     type: "TextField",
     key: "screen-search",
     kind: "search",
@@ -507,8 +509,8 @@ function screenPage(tab, rows, query = "", searchItems = [], searchFailed = fals
     trailingLabel: "Buscar",
     trailingLabelEn: "Search",
     onTrailingTap: "search",
-  }];
-  if (query) {
+  });
+  if (tab === "buscar" && query) {
     body.push({ type: "Text", key: "search-title", text: `Resultados para: ${query}`, style: "h3" });
     if (searchFailed) {
       body.push({ type: "errorState", title: "No se pudo buscar", text: "La fuente no respondió. Intenta nuevamente." });
@@ -517,7 +519,7 @@ function screenPage(tab, rows, query = "", searchItems = [], searchFailed = fals
     } else {
       body.push({ type: "emptyState", title: "Sin resultados", text: "No encontramos títulos para esa búsqueda." });
     }
-  } else {
+  } else if (tab !== "buscar") {
     if (slides.length === 1) body.push(heroCard(slides[0]));
     if (slides.length > 1) body.push({ type: "PageView", key: "featured", autoPlayMs: 6000, children: slides.map(heroCard) });
     for (const row of rows.slice(0, 10)) {
@@ -554,7 +556,7 @@ function screenPage(tab, rows, query = "", searchItems = [], searchFailed = fals
 export async function screen(context = {}) {
   const state = context.state && typeof context.state === "object" ? context.state : {};
   const tab = SCREEN_TABS.some((entry) => entry.id === state.tab) ? state.tab : "tendencia-hoy";
-  const query = typeof state.query === "string" ? state.query.trim().slice(0, 100) : "";
+  const query = tab === "buscar" && typeof state.query === "string" ? state.query.trim().slice(0, 100) : "";
   if (query) {
     try {
       return screenPage(tab, [], query, await search({ q: query, type: "any" }));
