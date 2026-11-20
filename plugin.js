@@ -768,15 +768,31 @@ async function capture(server) {
     if (direct === false) return null;
     if (direct) return direct;
   }
-  const page = await kino.browser.capture(server.url, { timeoutMs: isVoe ? 25000 : 18000 });
-  const media = page.media && page.media[0];
+  const page = await kino.browser.capture(server.url, { timeoutMs: isVoe ? 30000 : 22000 });
+  const mediaCandidates = (page.media || [])
+    .filter((candidate) => candidate && typeof candidate.url === "string" && candidate.url)
+    .sort((a, b) => Number(isHls(b)) - Number(isHls(a)));
+  const media = mediaCandidates[0];
   if (!media) throw kino.error("unavailable", "El servidor no entregó video");
   const subtitles = (page.subtitles || []).map((subtitle) => ({
     lang: subtitle.lang || "und",
     url: subtitle.url,
     format: subtitle.format === "srt" ? "srt" : "vtt",
   }));
-  return { url: media.url, mime: media.mime, headers: media.headers, subtitles };
+  const alternatives = mediaCandidates.slice(1)
+    .filter((candidate) => candidate.url !== media.url)
+    .slice(0, 7)
+    .map((candidate, index) => ({
+      url: candidate.url,
+      mime: candidate.mime,
+      headers: candidate.headers,
+      label: isHls(candidate) ? "HLS · alternativa " + (index + 1) : "Alternativa " + (index + 1),
+    }));
+  return { url: media.url, mime: media.mime, headers: media.headers, subtitles, alternatives };
+}
+
+function isHls(media) {
+  return /mpegurl|m3u8/i.test(String(media && (media.mime || "") + " " + (media.url || "")));
 }
 
 function rot13(value) {
@@ -871,13 +887,15 @@ export async function resolve(ref) {
       }
       const response = { ...stream, label: server.label };
       if (stream.subtitles && !stream.subtitles.length) delete response.subtitles;
+      if (stream.alternatives && !stream.alternatives.length) delete response.alternatives;
       if (selected === null) {
         const index = allServers.indexOf(server);
-        response.alternatives = allServers
+        const serverAlternatives = allServers
           .map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
           .filter(({ candidateIndex }) => candidateIndex !== index)
           .slice(0, 7)
           .map(({ candidate, candidateIndex }) => ({ label: candidate.label, ref: pageUrl + "|" + candidateIndex }));
+        response.alternatives = [...(response.alternatives || []), ...serverAlternatives].slice(0, 8);
       }
       return response;
     } catch (error) {
