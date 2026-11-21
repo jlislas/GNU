@@ -771,9 +771,11 @@ async function capture(server) {
     if (direct) return direct;
   }
   const page = await kino.browser.capture(server.url, { timeoutMs: isVoe ? 30000 : 22000 });
+  // Respetar el orden del reproductor: una fuente HLS puede responder
+  // correctamente al inicio y quedarse sin segmentos después. Kino puede
+  // usar las demás entradas como alternativas, pero no debe forzar HLS.
   const mediaCandidates = (page.media || [])
-    .filter((candidate) => candidate && typeof candidate.url === "string" && candidate.url)
-    .sort((a, b) => Number(isHls(b)) - Number(isHls(a)));
+    .filter((candidate) => candidate && typeof candidate.url === "string" && candidate.url);
   const media = mediaCandidates[0];
   if (!media) throw kino.error("unavailable", "El servidor no entregó video");
   const subtitles = (page.subtitles || []).map((subtitle) => ({
