@@ -770,7 +770,7 @@ async function capture(server) {
     if (direct === false) return null;
     if (direct) return direct;
   }
-  const page = await kino.browser.capture(server.url, { timeoutMs: isVoe ? 30000 : 22000 });
+  const page = await kino.browser.capture(server.url, { timeoutMs: isVoe ? 30000 : 30000 });
   // Respetar el orden del reproductor: una fuente HLS puede responder
   // correctamente al inicio y quedarse sin segmentos después. Kino puede
   // usar las demás entradas como alternativas, pero no debe forzar HLS.
@@ -882,8 +882,18 @@ export async function resolve(ref) {
   if (!servers.length) throw kino.error("unavailable", "No hay servidores seguros disponibles", { userMessage: "Este título no tiene un servidor seguro disponible." });
   let firstError;
   for (const server of servers) {
+    let stream;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        stream = await capture(server);
+        break;
+      } catch (error) {
+        firstError = error;
+        if (error.code !== "timeout" || attempt === 2) break;
+        try { kino.log("retrying server after timeout", server.label); } catch {}
+      }
+    }
     try {
-      const stream = await capture(server);
       if (!stream) {
         firstError = kino.error("unavailable", "El servidor no está disponible");
         try { kino.log("server unavailable", server.label); } catch {}
