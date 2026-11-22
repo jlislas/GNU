@@ -12,7 +12,7 @@ const BASE = SOURCE_BASES[0];
 const CARD_RE = /<a\b(?=[^>]*\bclass="[^"]*\bgnrd-card\b[^"]*")([^>]*)>([\s\S]*?)<\/a>/gi;
 const EP_RE = /<a\s+class="gnrd-epc"\s+href="([^"]+)"[^>]*data-s="(\d+)"[^>]*data-e="(\d+)"[\s\S]*?<span class="gnrd-epc-title">([^<]*)<\/span>/gi;
 const PLAYER_RE = /var\s+_gnrdPid\s*=\s*(\d+)\s*,\s*_gnrdTok\s*=\s*"([a-f0-9]+)"/i;
-const SAFE_SERVER_HOSTS = new Set(["vidara.to", "voe.sx"]);
+const SAFE_SERVER_HOSTS = new Set(["vidara.to", "voe.sx", "savefiles.com"]);
 const UPCOMING_RE = /<a\s+class="gnrd-card\s+gnest-ecard"([\s\S]*?)<\/a>/gi;
 
 function text(value) {
