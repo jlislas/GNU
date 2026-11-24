@@ -781,11 +781,10 @@ async function capture(server) {
   const page = await kino.browser.capture(server.url, {
     timeoutMs: 25000,
     autoplay: true,
-    match: "\\.m3u8|\\.mp4|master|playlist",
   });
-  // Respetar el orden del reproductor: una fuente HLS puede responder
-  // correctamente al inicio y quedarse sin segmentos después. Kino puede
-  // usar las demás entradas como alternativas, pero no debe forzar HLS.
+  // Kino ya prioriza automáticamente las listas HLS y devuelve la primera
+  // fuente reproducible. Las demás peticiones pueden ser variantes internas
+  // de esa misma lista, no URLs independientes para alternatives.
   const mediaCandidates = (page.media || [])
     .filter((candidate) => candidate && typeof candidate.url === "string" && candidate.url);
   const media = mediaCandidates[0];
@@ -795,20 +794,7 @@ async function capture(server) {
     url: subtitle.url,
     format: subtitle.format === "srt" ? "srt" : "vtt",
   }));
-  const alternatives = mediaCandidates.slice(1)
-    .filter((candidate) => candidate.url !== media.url)
-    .slice(0, 7)
-    .map((candidate, index) => ({
-      url: candidate.url,
-      mime: candidate.mime,
-      headers: candidate.headers,
-      label: isHls(candidate) ? "HLS · alternativa " + (index + 1) : "Alternativa " + (index + 1),
-    }));
-  return { url: media.url, mime: media.mime, headers: media.headers, subtitles, alternatives };
-}
-
-function isHls(media) {
-  return /mpegurl|m3u8/i.test(String(media && (media.mime || "") + " " + (media.url || "")));
+  return { url: media.url, mime: media.mime, headers: media.headers, subtitles };
 }
 
 function rot13(value) {
