@@ -13,6 +13,7 @@ const CARD_RE = /<a\b(?=[^>]*\bclass="[^"]*\bgnrd-card\b[^"]*")([^>]*)>([\s\S]*?
 const EP_RE = /<a\s+class="gnrd-epc"\s+href="([^"]+)"[^>]*data-s="(\d+)"[^>]*data-e="(\d+)"[\s\S]*?<span class="gnrd-epc-title">([^<]*)<\/span>/gi;
 const PLAYER_RE = /var\s+_gnrdPid\s*=\s*(\d+)\s*,\s*_gnrdTok\s*=\s*"([a-f0-9]+)"/i;
 const SAFE_SERVER_HOSTS = new Set(["vidara.to", "vidaraa.cc", "voe.sx", "savefiles.com", "bysevepoin.com"]);
+const SERVER_PRIORITY = ["bysevepoin.com", "vidara.to", "vidaraa.cc", "savefiles.com", "voe.sx"];
 const UPCOMING_RE = /<a\s+class="gnrd-card\s+gnest-ecard"([\s\S]*?)<\/a>/gi;
 
 function text(value) {
@@ -767,7 +768,11 @@ async function playerServers(html, pageUrl) {
   });
   let preferred = "any";
   try { preferred = String(kino.config.get("serverPreference") || "any"); } catch {}
-  if (preferred !== "any") servers.sort((a, b) => Number(new URL(b.url).hostname === preferred) - Number(new URL(a.url).hostname === preferred));
+  servers.sort((a, b) => {
+    const host = (server) => new URL(server.url).hostname.replace(/^www\./, "");
+    if (preferred !== "any") return Number(host(b) === preferred) - Number(host(a) === preferred);
+    return SERVER_PRIORITY.indexOf(host(a)) - SERVER_PRIORITY.indexOf(host(b));
+  });
   return servers;
 }
 
@@ -881,20 +886,20 @@ export async function resolve(ref) {
   let firstError;
   for (const server of servers) {
     let stream;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        stream = await capture(server);
-        break;
-      } catch (error) {
-        firstError = error;
-        if (error.code !== "timeout" || attempt === 2) break;
-        try { kino.log("retrying server after timeout", server.label); } catch {}
-      }
+    let serverError;
+    try {
+      stream = await capture(server);
+    } catch (error) {
+      serverError = error;
+      firstError = error;
+      try { kino.log("server failed", server.label, error.code || "error"); } catch {}
     }
     try {
       if (!stream) {
-        firstError = kino.error("unavailable", "El servidor no está disponible");
-        try { kino.log("server unavailable", server.label); } catch {}
+        firstError = serverError || kino.error("unavailable", "El servidor no está disponible");
+        if (!serverError) {
+          try { kino.log("server unavailable", server.label); } catch {}
+        }
         continue;
       }
       const response = { ...stream, label: server.label };
