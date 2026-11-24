@@ -13,7 +13,7 @@ const CARD_RE = /<a\b(?=[^>]*\bclass="[^"]*\bgnrd-card\b[^"]*")([^>]*)>([\s\S]*?
 const EP_RE = /<a\s+class="gnrd-epc"\s+href="([^"]+)"[^>]*data-s="(\d+)"[^>]*data-e="(\d+)"[\s\S]*?<span class="gnrd-epc-title">([^<]*)<\/span>/gi;
 const PLAYER_RE = /var\s+_gnrdPid\s*=\s*(\d+)\s*,\s*_gnrdTok\s*=\s*"([a-f0-9]+)"/i;
 const SAFE_SERVER_HOSTS = new Set(["vidara.to", "vidaraa.cc", "voe.sx", "savefiles.com", "bysevepoin.com"]);
-const SERVER_PRIORITY = ["bysevepoin.com", "vidara.to", "vidaraa.cc", "savefiles.com", "voe.sx"];
+const SERVER_PRIORITY = ["savefiles.com", "vidara.to", "vidaraa.cc", "bysevepoin.com", "voe.sx"];
 const UPCOMING_RE = /<a\s+class="gnrd-card\s+gnest-ecard"([\s\S]*?)<\/a>/gi;
 
 function text(value) {
@@ -884,7 +884,13 @@ export async function resolve(ref) {
   const servers = selected === null ? allServers : [allServers[selected]].filter(Boolean);
   if (!servers.length) throw kino.error("unavailable", "No hay servidores seguros disponibles", { userMessage: "Este título no tiene un servidor seguro disponible." });
   let firstError;
+  const timedOutHosts = new Set();
   for (const server of servers) {
+    const serverHost = new URL(server.url).hostname.replace(/^www\./, "");
+    if (selected === null && timedOutHosts.has(serverHost)) {
+      try { kino.log("server skipped after host timeout", server.label); } catch {}
+      continue;
+    }
     let stream;
     let serverError;
     try {
@@ -892,6 +898,7 @@ export async function resolve(ref) {
     } catch (error) {
       serverError = error;
       firstError = error;
+      if (error.code === "timeout") timedOutHosts.add(serverHost);
       try { kino.log("server failed", server.label, error.code || "error"); } catch {}
     }
     try {
