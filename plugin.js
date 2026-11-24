@@ -12,7 +12,7 @@ const BASE = SOURCE_BASES[0];
 const CARD_RE = /<a\b(?=[^>]*\bclass="[^"]*\bgnrd-card\b[^"]*")([^>]*)>([\s\S]*?)<\/a>/gi;
 const EP_RE = /<a\s+class="gnrd-epc"\s+href="([^"]+)"[^>]*data-s="(\d+)"[^>]*data-e="(\d+)"[\s\S]*?<span class="gnrd-epc-title">([^<]*)<\/span>/gi;
 const PLAYER_RE = /var\s+_gnrdPid\s*=\s*(\d+)\s*,\s*_gnrdTok\s*=\s*"([a-f0-9]+)"/i;
-const SAFE_SERVER_HOSTS = new Set(["vidara.to", "voe.sx", "savefiles.com"]);
+const SAFE_SERVER_HOSTS = new Set(["vidara.to", "vidaraa.cc", "voe.sx", "savefiles.com", "bysevepoin.com"]);
 const UPCOMING_RE = /<a\s+class="gnrd-card\s+gnest-ecard"([\s\S]*?)<\/a>/gi;
 
 function text(value) {
@@ -739,7 +739,15 @@ async function playerServers(html, pageUrl) {
   let lastError;
   for (const candidate of sourceCandidates(endpoint)) {
     try {
-      const response = await kino.fetch(candidate, { headers: { "X-Gn-Scr": "kino", "Referer": pageUrl } });
+      const response = await kino.fetch(candidate, {
+        headers: {
+          "X-Gn-Scr": "kino",
+          // GNULA now expects the same device header sent by its web player.
+          // "ns" means that Kino does not persist a device identifier.
+          "X-Gn-Dev": "ns",
+          "Referer": pageUrl,
+        },
+      });
       if (!response.ok) {
         lastError = new Error(`HTTP ${response.status}`);
         continue;
@@ -770,7 +778,11 @@ async function capture(server) {
     if (direct === false) return null;
     if (direct) return direct;
   }
-  const page = await kino.browser.capture(server.url, { timeoutMs: isVoe ? 30000 : 30000 });
+  const page = await kino.browser.capture(server.url, {
+    timeoutMs: 30000,
+    autoplay: true,
+    match: "\\.m3u8|\\.mp4|master|playlist",
+  });
   // Respetar el orden del reproductor: una fuente HLS puede responder
   // correctamente al inicio y quedarse sin segmentos después. Kino puede
   // usar las demás entradas como alternativas, pero no debe forzar HLS.

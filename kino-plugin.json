@@ -1,7 +1,7 @@
 {
   "id": "gnu-gnula",
   "name": "Gnu",
-  "version": "0.4.12",
+  "version": "0.4.13",
   "apiVersion": 8,
   "entry": "plugin.js",
   "description": "Películas, series y anime de GNULA HD",
@@ -19,8 +19,10 @@
     "i2.wp.com",
     "i3.wp.com",
     "vidara.to",
+    "vidaraa.cc",
     "voe.sx",
     "savefiles.com",
+    "bysevepoin.com",
     "www.youtube-nocookie.com",
     "www.youtube.com"
   ],
@@ -306,6 +308,6 @@
   ],
   "signature": {
     "authorKey": "d28deb8326c4fe720294a081cacb1efa40c15791e7e8c094cdad6ff94d5ed4d3",
-    "value": "5e693b3e65d707b745e3d6419d13ea267c5fec134bc2afd85cde01d8f852eb3650a7d19545b4927c37d9afa3a454c7a14f2e464831cc9bd7cc491165ec5f980d"
+    "value": "6eef50f57baaad05ba42c9e2a4e6b8e6343974ec079c6204b88bc7d4c10491fc217291a0ec4778698be54b23af57ec8ebdbdda18aeb9736cc23530afef86140e"
   }
 }
