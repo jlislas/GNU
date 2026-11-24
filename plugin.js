@@ -779,7 +779,7 @@ async function capture(server) {
     if (direct) return direct;
   }
   const page = await kino.browser.capture(server.url, {
-    timeoutMs: 30000,
+    timeoutMs: 25000,
     autoplay: true,
     match: "\\.m3u8|\\.mp4|master|playlist",
   });
