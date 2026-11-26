@@ -1,7 +1,7 @@
 {
   "id": "gnu-gnula",
   "name": "Gnu",
-  "version": "0.4.19",
+  "version": "0.4.21",
   "apiVersion": 8,
   "entry": "plugin.js",
   "description": "Películas, series y anime de GNULA HD",
@@ -308,6 +308,6 @@
   ],
   "signature": {
     "authorKey": "d28deb8326c4fe720294a081cacb1efa40c15791e7e8c094cdad6ff94d5ed4d3",
-    "value": "ffd37ff2af5d75a123c0aabc28eeff67fb1f933ec5d5fcf1880dd7646c9e22a0fe897602a5e86c2bcf0b842f59b6a6735b17c45ed52b56ba2049a9bfcdaa240d"
+    "value": "c674f5ccea09b4c66de5f63e76fade9a51c22a6ca88fff62bc1f9ded69dc1cc0850cceffb43266c74fa1be2058236f32afdbc0acee7c49663b68949a58a73706"
   }
 }

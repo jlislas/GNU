@@ -784,7 +784,7 @@ async function capture(server) {
     if (direct) return direct;
   }
   const page = await kino.browser.capture(server.url, {
-    timeoutMs: 25000,
+    timeoutMs: 15000,
     autoplay: true,
   });
   // Kino ya prioriza automáticamente las listas HLS y devuelve la primera
@@ -792,9 +792,9 @@ async function capture(server) {
   // de esa misma lista, no URLs independientes para alternatives.
   const mediaCandidates = (page.media || [])
     .filter((candidate) => candidate && typeof candidate.url === "string" && candidate.url);
-  // Experimental playback mode: prefer a progressive MP4 when the provider
-  // exposes one; otherwise retain Kino's normal HLS-first choice.
-  const media = mediaCandidates.find((candidate) => isProgressive(candidate)) || mediaCandidates[0];
+  // Use the first playable source in the order returned by Kino. Do not
+  // reorder HLS, MP4 or any other source format here.
+  const media = mediaCandidates[0];
   if (!media) throw kino.error("unavailable", "El servidor no entregó video");
   const subtitles = (page.subtitles || []).map((subtitle) => ({
     lang: subtitle.lang || "und",
@@ -802,11 +802,6 @@ async function capture(server) {
     format: subtitle.format === "srt" ? "srt" : "vtt",
   }));
   return { url: media.url, mime: media.mime, headers: media.headers, subtitles };
-}
-
-function isProgressive(media) {
-  return /video\/mp4/i.test(String(media && media.mime || ""))
-    || /\.mp4(?:[?#]|$)/i.test(String(media && media.url || ""));
 }
 
 function rot13(value) {
